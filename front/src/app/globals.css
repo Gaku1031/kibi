@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+/* BlockNote エディタのスタイル調整 (Notion風) */
+.blocknote-editor-wrapper {
+  width: 100%;
+}
+
+.blocknote-editor-wrapper .bn-container {
+  background: transparent;
+  border: none;
+}
+
+.blocknote-editor-wrapper .bn-editor {
+  font-family: var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.blocknote-editor-wrapper .ProseMirror {
+  padding: 0;
+  min-height: 500px;
+  background: transparent;
+  font-family: inherit;
+}
+
+.blocknote-editor-wrapper .ProseMirror p {
+  margin-bottom: 0.5rem;
+}
+
+.blocknote-editor-wrapper .ProseMirror h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.blocknote-editor-wrapper .ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.blocknote-editor-wrapper .ProseMirror h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.blocknote-editor-wrapper .ProseMirror:focus {
+  outline: none;
+}
+
+.blocknote-editor-wrapper .ProseMirror p.is-editor-empty:first-child::before {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 複数行テキストの省略表示 */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
