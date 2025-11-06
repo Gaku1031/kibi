@@ -39,13 +39,45 @@ jobs:
       - name: Check and create Comprehend endpoint
         id: comprehend
         run: |
-          # エンドポイントの存在確認
+          # エンドポイントの存在確認（全ステータス）
           ENDPOINT_ARN=$(aws comprehend list-endpoints \
-            --filter "Status=IN_SERVICE" \
             --query "EndpointPropertiesList[?EndpointName=='${ENDPOINT_NAME}'].EndpointArn" \
             --output text)
 
-          if [ -z "$ENDPOINT_ARN" ]; then
+          if [ -n "$ENDPOINT_ARN" ]; then
+            echo "Endpoint found: $ENDPOINT_ARN"
+
+            # ステータス確認
+            STATUS=$(aws comprehend describe-endpoint \
+              --endpoint-arn $ENDPOINT_ARN \
+              --query 'EndpointProperties.Status' \
+              --output text)
+
+            echo "Current status: $STATUS"
+
+            # IN_SERVICE以外の場合は待機
+            if [ "$STATUS" != "IN_SERVICE" ]; then
+              echo "Waiting for endpoint to become available..."
+              for i in {1..90}; do
+                STATUS=$(aws comprehend describe-endpoint \
+                  --endpoint-arn $ENDPOINT_ARN \
+                  --query 'EndpointProperties.Status' \
+                  --output text)
+
+                echo "Current status: $STATUS (attempt $i/90)"
+
+                if [ "$STATUS" = "IN_SERVICE" ]; then
+                  echo "Endpoint is ready!"
+                  break
+                elif [ "$STATUS" = "FAILED" ]; then
+                  echo "Error: Endpoint is in FAILED state"
+                  exit 1
+                fi
+
+                sleep 20
+              done
+            fi
+          else
             echo "Comprehend endpoint not found. Creating new endpoint..."
 
             # エンドポイント作成
@@ -78,8 +110,6 @@ jobs:
 
               sleep 20
             done
-          else
-            echo "Endpoint already exists: $ENDPOINT_ARN"
           fi
 
           # 環境変数として出力
