@@ -12,7 +12,7 @@ export function DiaryListPage() {
     return (
       <div className="flex h-screen">
         <Sidebar diaries={diaries} />
-        <div className="flex-1 flex items-center justify-center bg-white">
+        <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
           <div className="text-center">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">エラーが発生しました</h2>
             <p className="text-gray-600 mb-4">日記の読み込みに失敗しました</p>
@@ -31,17 +31,11 @@ export function DiaryListPage() {
       {/* メインコンテンツエリア */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 一覧エリア */}
-        <main className="flex-1 overflow-y-auto bg-white">
-          <div className="max-w-4xl mx-auto px-24 py-12">
+        <main className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--background)' }}>
+          <div className="max-w-6xl mx-auto px-12 py-12">
             {/* タイトル */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">一覧</h1>
-              <p className="text-gray-600">
-                {diaries.length > 0
-                  ? `${diaries.length}件の日記があります`
-                  : '日記を書いて感情を記録しましょう'
-                }
-              </p>
+            <div className="mb-12">
+              <h1 className="text-4xl font-bold mb-3" style={{ color: 'var(--foreground)' }}>一覧</h1>
             </div>
 
             {/* 日記一覧 */}

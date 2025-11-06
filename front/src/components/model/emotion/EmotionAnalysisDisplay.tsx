@@ -28,7 +28,7 @@ export function EmotionAnalysisDisplay({ analysis, className = '' }: EmotionAnal
                   className="h-2 rounded-full transition-all duration-300"
                   style={{
                     width: `${value * 100}%`,
-                    background: `linear-gradient(90deg, ${EMOTION_COLORS[emotion].start}, ${EMOTION_COLORS[emotion].end})`
+                    background: `linear-gradient(90deg, ${EMOTION_COLORS[emotion].startColor}, ${EMOTION_COLORS[emotion].endColor})`
                   }}
                 />
               </div>

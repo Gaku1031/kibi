@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ComprehendAccess",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "comprehend.amazonaws.com"
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::kibi-comprehend-training",
+        "arn:aws:s3:::kibi-comprehend-training/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:SourceAccount": "937748476221"
+        }
+      }
+    }
+  ]
+}

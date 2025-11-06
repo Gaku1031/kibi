@@ -1,7 +1,16 @@
-import type { EmotionAnalysis, EmotionIcon, Triangle, EmotionType } from '../types/emotion';
-import { EMOTION_COLORS } from '../types/emotion';
+import type { EmotionAnalysis, EmotionIcon, Triangle, EmotionType } from '../types/index.js';
 
-// シンプルな疑似乱数生成器（再現性のため）
+const EMOTION_COLORS: Record<EmotionType, { startColor: string; endColor: string }> = {
+  joy: { startColor: '#FFD700', endColor: '#FFA500' },
+  trust: { startColor: '#87CEEB', endColor: '#4682B4' },
+  fear: { startColor: '#800080', endColor: '#4B0082' },
+  surprise: { startColor: '#FFFF00', endColor: '#FFD700' },
+  sadness: { startColor: '#4169E1', endColor: '#191970' },
+  disgust: { startColor: '#9ACD32', endColor: '#556B2F' },
+  anger: { startColor: '#FF4500', endColor: '#8B0000' },
+  anticipation: { startColor: '#FF69B4', endColor: '#C71585' }
+};
+
 class SeededRandom {
   private seed: number;
 
@@ -16,18 +25,15 @@ class SeededRandom {
 }
 
 export function generateEmotionIcon(
-  emotionAnalysis: EmotionAnalysis,
+  emotionAnalysis: Omit<EmotionAnalysis, 'diaryId' | 'analyzedAt'>,
   seed?: number
 ): EmotionIcon {
   const iconSeed = seed ?? Math.floor(Math.random() * 1000000);
   const random = new SeededRandom(iconSeed);
   
   const triangles: Triangle[] = [];
-
-  // analyzedAtを除外して感情データのみ抽出
-  const { analyzedAt, ...emotionScores } = emotionAnalysis;
-  const emotions = Object.entries(emotionScores) as [EmotionType, number][];
-
+  const emotions = Object.entries(emotionAnalysis) as [EmotionType, number][];
+  
   // 感情値が0.1以上の感情のみ処理
   const significantEmotions = emotions.filter(([, value]) => value >= 0.1);
   
@@ -95,57 +101,4 @@ function findNonOverlappingPosition(
   }
   
   return { x, y };
-}
-
-export function renderEmotionIconToSVG(
-  icon: EmotionIcon,
-  width: number = 100,
-  height: number = 100
-): string {
-  const uniqueId = `icon-${icon.seed}`;
-  
-  const gradientDefs = icon.triangles.map((triangle, index) => {
-    const gradientId = `${uniqueId}-gradient-${index}`;
-    return `
-      <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style="stop-color:${triangle.gradient.startColor};stop-opacity:0.8" />
-        <stop offset="100%" style="stop-color:${triangle.gradient.endColor};stop-opacity:0.9" />
-      </linearGradient>
-    `;
-  }).join('');
-
-  const triangleElements = icon.triangles.map((triangle, index) => {
-    const size = triangle.size * 30; // 基本サイズ
-    const centerX = (triangle.x / 100) * width;
-    const centerY = (triangle.y / 100) * height;
-    
-    // 正三角形の頂点を計算
-    const points = [
-      [centerX, centerY - size * 0.577], // 上の頂点
-      [centerX - size * 0.5, centerY + size * 0.289], // 左下の頂点
-      [centerX + size * 0.5, centerY + size * 0.289]  // 右下の頂点
-    ];
-    
-    const gradientId = `${uniqueId}-gradient-${index}`;
-    
-    return `
-      <polygon 
-        points="${points.map(p => p.join(',')).join(' ')}"
-        fill="url(#${gradientId})"
-        transform="rotate(${triangle.rotation} ${centerX} ${centerY})"
-        stroke="rgba(255,255,255,0.3)"
-        stroke-width="1"
-      />
-    `;
-  }).join('');
-  
-  return `
-    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        ${gradientDefs}
-      </defs>
-      <rect width="100%" height="100%" fill="rgba(0,0,0,0.05)" rx="8"/>
-      ${triangleElements}
-    </svg>
-  `;
 }

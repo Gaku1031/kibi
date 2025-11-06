@@ -14,7 +14,7 @@ export function TimelinePage() {
     return (
       <div className="flex h-screen">
         <Sidebar diaries={diaries} />
-        <div className="flex-1 flex items-center justify-center bg-white">
+        <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
           <div className="text-center">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">エラーが発生しました</h2>
             <p className="text-gray-600 mb-4">日記の読み込みに失敗しました</p>
@@ -37,12 +37,11 @@ export function TimelinePage() {
       {/* メインコンテンツエリア */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 時系列エリア */}
-        <main className="flex-1 overflow-y-auto bg-white">
+        <main className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--background)' }}>
           <div className="max-w-4xl mx-auto px-24 py-12">
             {/* タイトル */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">時系列表示</h1>
-              <p className="text-gray-600">あなたの感情の変化を時間軸で確認</p>
+            <div className="mb-12">
+              <h1 className="text-4xl font-bold mb-3" style={{ color: 'var(--foreground)' }}>時系列表示</h1>
             </div>
 
             {isLoading ? (
@@ -65,7 +64,7 @@ export function TimelinePage() {
                 {/* 時系列表示 */}
                 <div className="relative">
                   {/* タイムライン */}
-                  <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-200" />
+                  <div className="absolute left-8 top-0 bottom-0 w-1 bg-gradient-to-b from-cyan-200 via-blue-200 to-purple-200 rounded-full" />
 
                   <div className="space-y-8">
                     {diariesWithIcons.map((diary) => (
@@ -73,7 +72,8 @@ export function TimelinePage() {
                         {/* タイムラインドット */}
                         <div className="relative z-10 flex-shrink-0">
                           <Link href={`/diary/${diary.id}`}>
-                            <div className="cursor-pointer hover:scale-110 transition-transform">
+                            <div className="cursor-pointer hover:scale-125 transition-all duration-300 relative">
+                              <div className="absolute inset-0 bg-gradient-to-br from-cyan-200/30 to-blue-200/30 rounded-full blur-lg"></div>
                               <EmotionIcon icon={diary.iconData!} size={64} />
                             </div>
                           </Link>
@@ -82,13 +82,13 @@ export function TimelinePage() {
                         {/* 日記情報 */}
                         <div className="flex-1 min-w-0">
                           <Link href={`/diary/${diary.id}`}>
-                            <div className="cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                              <h3 className="text-lg font-medium text-gray-900 mb-1">
+                            <div className="cursor-pointer hover:shadow-lg p-4 rounded-xl transition-all duration-300 bg-gradient-to-br from-white via-gray-50 to-blue-50/20 border border-gray-100/50 hover:-translate-y-1">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2">
                                 {getDisplayTitle(diary)}
                               </h3>
 
-                              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                <time dateTime={diary.createdAt.toISOString()}>
+                              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                <time dateTime={diary.createdAt.toISOString()} className="font-medium">
                                   {diary.createdAt.toLocaleDateString('ja-JP', {
                                     year: 'numeric',
                                     month: 'long',
@@ -98,7 +98,7 @@ export function TimelinePage() {
                                 </time>
 
                                 {diary.emotionAnalysis && (
-                                  <span>
+                                  <span className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-medium">
                                     分析済み: {diary.emotionAnalysis.analyzedAt.toLocaleTimeString('ja-JP', {
                                       hour: '2-digit',
                                       minute: '2-digit'

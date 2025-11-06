@@ -1,0 +1,142 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ap-northeast-1
+  COMPREHEND_CLASSIFIER_ARN: arn:aws:comprehend:ap-northeast-1:223708988018:document-classifier/kibi-emotion-classifier
+  ENDPOINT_NAME: kibi-emotion-endpoint
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            infrastructure/package-lock.json
+            backend/package-lock.json
+
+      - name: Check and create Comprehend endpoint
+        id: comprehend
+        run: |
+          # エンドポイントの存在確認
+          ENDPOINT_ARN=$(aws comprehend list-endpoints \
+            --filter "Status=IN_SERVICE" \
+            --query "EndpointPropertiesList[?EndpointName=='${ENDPOINT_NAME}'].EndpointArn" \
+            --output text)
+
+          if [ -z "$ENDPOINT_ARN" ]; then
+            echo "Comprehend endpoint not found. Creating new endpoint..."
+
+            # エンドポイント作成
+            CREATE_OUTPUT=$(aws comprehend create-endpoint \
+              --endpoint-name ${ENDPOINT_NAME} \
+              --model-arn ${COMPREHEND_CLASSIFIER_ARN} \
+              --desired-inference-units 1 \
+              --output json)
+
+            ENDPOINT_ARN=$(echo $CREATE_OUTPUT | jq -r '.EndpointArn')
+            echo "Created endpoint: $ENDPOINT_ARN"
+
+            # エンドポイントがIN_SERVICEになるまで待機（最大30分）
+            echo "Waiting for endpoint to become available..."
+            for i in {1..90}; do
+              STATUS=$(aws comprehend describe-endpoint \
+                --endpoint-arn $ENDPOINT_ARN \
+                --query 'EndpointProperties.Status' \
+                --output text)
+
+              echo "Current status: $STATUS (attempt $i/90)"
+
+              if [ "$STATUS" = "IN_SERVICE" ]; then
+                echo "Endpoint is ready!"
+                break
+              elif [ "$STATUS" = "FAILED" ]; then
+                echo "Error: Endpoint creation failed"
+                exit 1
+              fi
+
+              sleep 20
+            done
+          else
+            echo "Endpoint already exists: $ENDPOINT_ARN"
+          fi
+
+          # 環境変数として出力
+          echo "endpoint_arn=$ENDPOINT_ARN" >> $GITHUB_OUTPUT
+
+      - name: Deploy infrastructure
+        working-directory: infrastructure
+        env:
+          COMPREHEND_ENDPOINT_ARN: ${{ steps.comprehend.outputs.endpoint_arn }}
+        run: |
+          npm ci
+          npm run deploy -- --require-approval never
+
+      - name: Get API URL
+        id: api
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name KibiStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiURL`].OutputValue' \
+            --output text)
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "API URL: $API_URL"
+
+      - name: Update Amplify environment variables
+        run: |
+          # Amplifyアプリの取得（名前で検索）
+          APP_ID=$(aws amplify list-apps \
+            --query "apps[?name=='kibi-frontend'].appId" \
+            --output text)
+
+          if [ -n "$APP_ID" ]; then
+            echo "Updating Amplify app: $APP_ID"
+
+            # 環境変数の更新
+            aws amplify update-app \
+              --app-id $APP_ID \
+              --environment-variables NEXT_PUBLIC_API_URL=${{ steps.api.outputs.api_url }}
+
+            # 再ビルドをトリガー
+            BRANCH_NAME="main"
+            JOB_ID=$(aws amplify start-job \
+              --app-id $APP_ID \
+              --branch-name $BRANCH_NAME \
+              --job-type RELEASE \
+              --query 'jobSummary.jobId' \
+              --output text)
+
+            echo "Triggered Amplify build: $JOB_ID"
+          else
+            echo "Amplify app not found. Please create it manually using AMPLIFY_SETUP.md"
+          fi
+
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Comprehend Endpoint**: ${{ steps.comprehend.outputs.endpoint_arn }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API URL**: ${{ steps.api.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note**: Comprehend endpoint costs ~$40/month while running." >> $GITHUB_STEP_SUMMARY

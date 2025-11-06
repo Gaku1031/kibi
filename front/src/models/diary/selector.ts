@@ -52,15 +52,15 @@ export function getPrimaryEmotion(analysis: EmotionAnalysis): {
   value: number;
   label: string;
 } | null {
-  const emotions = Object.entries(analysis) as [EmotionType, number][];
-  const validEmotions = emotions.filter(([key]) => key !== 'analyzedAt');
-  
-  if (validEmotions.length === 0) return null;
-  
-  const [emotion, value] = validEmotions.reduce((max, current) => 
+  const { analyzedAt, ...emotionScores } = analysis;
+  const emotions = Object.entries(emotionScores) as [EmotionType, number][];
+
+  if (emotions.length === 0) return null;
+
+  const [emotion, value] = emotions.reduce((max, current) =>
     current[1] > max[1] ? current : max
   );
-  
+
   return {
     emotion,
     value,
@@ -75,10 +75,10 @@ export function getSortedEmotions(analysis: EmotionAnalysis): Array<{
   label: string;
   percentage: string;
 }> {
-  const emotions = Object.entries(analysis) as [EmotionType, number][];
-  const validEmotions = emotions.filter(([key]) => key !== 'analyzedAt');
-  
-  return validEmotions
+  const { analyzedAt, ...emotionScores } = analysis;
+  const emotions = Object.entries(emotionScores) as [EmotionType, number][];
+
+  return emotions
     .map(([emotion, value]) => ({
       emotion,
       value,

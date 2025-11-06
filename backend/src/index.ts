@@ -1,0 +1,44 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { logger } from "hono/logger";
+import diaryRoutes from "./routes/diary.js";
+
+const app = new Hono();
+
+// ミドルウェア
+app.use("*", logger());
+app.use(
+  "*",
+  cors({
+    origin: ["http://localhost:3000", "https://*.cloudfront.net"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+// ヘルスチェック
+app.get("/health", (c) => {
+  return c.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// API ルート
+app.route("/api/diary", diaryRoutes);
+
+// 404 ハンドラー
+app.notFound((c) => {
+  return c.json({ error: "Not Found" }, 404);
+});
+
+// エラーハンドラー
+app.onError((err, c) => {
+  console.error("Unhandled error:", err);
+  return c.json({ error: "Internal Server Error" }, 500);
+});
+
+// Lambda Web Adapter用のポート設定
+const port = parseInt(process.env.PORT || "8080");
+
+export default {
+  port,
+  fetch: app.fetch,
+};

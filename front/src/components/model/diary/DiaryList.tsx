@@ -7,20 +7,78 @@ interface DiaryListProps {
   className?: string;
 }
 
+// 週の開始日（月曜日）を取得
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 月曜日を週の開始にする
+  const weekStart = new Date(d.getFullYear(), d.getMonth(), diff);
+  weekStart.setHours(0, 0, 0, 0); // 時刻をリセット
+  return weekStart;
+}
+
+// 週のラベルを生成
+function getWeekLabel(startDate: Date): string {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+
+  const diffTime = today.getTime() - weekStart.getTime();
+  const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+
+  if (diffWeeks === 0) return '今週';
+  if (diffWeeks === 1) return '先週';
+  if (diffWeeks < 4) return `${diffWeeks}週間前`;
+
+  const diffMonths = Math.floor(diffWeeks / 4);
+  if (diffMonths < 12) return `${diffMonths}ヶ月前`;
+
+  return `${Math.floor(diffMonths / 12)}年前`;
+}
+
+// 日記を週ごとにグループ化
+function groupByWeek(diaries: DiaryEntry[]): Array<{ weekStart: Date; label: string; diaries: DiaryEntry[] }> {
+  const groups = new Map<string, DiaryEntry[]>();
+
+  diaries.forEach((diary) => {
+    const weekStart = getWeekStart(diary.createdAt);
+    const key = weekStart.toISOString();
+
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key)!.push(diary);
+  });
+
+  // 週の開始日でソート（新しい順）
+  const sortedGroups = Array.from(groups.entries())
+    .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime())
+    .map(([key, diaries]) => {
+      const weekStart = new Date(key);
+      return {
+        weekStart,
+        label: getWeekLabel(weekStart),
+        diaries: diaries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      };
+    });
+
+  return sortedGroups;
+}
+
 export function DiaryList({ diaries, isLoading = false, className = '' }: DiaryListProps) {
   if (isLoading) {
     return (
-      <div className={`space-y-4 ${className}`}>
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
-            <div className="flex items-start space-x-4">
-              <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
-              <div className="flex-1">
-                <div className="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-full mb-1"></div>
-                <div className="h-4 bg-gray-200 rounded w-2/3 mb-3"></div>
-                <div className="h-3 bg-gray-200 rounded w-1/4"></div>
-              </div>
+      <div className={`space-y-8 ${className}`}>
+        {[...Array(2)].map((_, i) => (
+          <div key={i}>
+            <div className="h-6 bg-gray-200 rounded w-32 mb-4 animate-pulse"></div>
+            <div className="grid grid-cols-5 gap-6">
+              {[...Array(5)].map((_, j) => (
+                <div key={j} className="bg-white rounded-lg p-6 animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-16 mb-3"></div>
+                  <div className="w-24 h-24 bg-gray-200 rounded-lg mx-auto"></div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -40,10 +98,24 @@ export function DiaryList({ diaries, isLoading = false, className = '' }: DiaryL
     );
   }
 
+  const weekGroups = groupByWeek(diaries);
+
   return (
-    <div className={`space-y-4 ${className}`}>
-      {diaries.map((diary) => (
-        <DiaryCard key={diary.id} diary={diary} />
+    <div className={`space-y-12 ${className}`}>
+      {weekGroups.map((group) => (
+        <div key={group.weekStart.toISOString()}>
+          {/* 週のラベル */}
+          <h2 className="text-2xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>
+            {group.label}
+          </h2>
+
+          {/* グリッド表示 */}
+          <div className="grid grid-cols-5 gap-6">
+            {group.diaries.map((diary) => (
+              <DiaryCard key={diary.id} diary={diary} />
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );

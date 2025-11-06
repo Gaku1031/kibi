@@ -80,7 +80,7 @@ function parseContent(content: string): PartialBlock[] | undefined {
     return [
       {
         type: 'paragraph',
-        content: [{ type: 'text', text: content }]
+        content: [{ type: 'text', text: content, styles: {} }]
       }
     ];
   }

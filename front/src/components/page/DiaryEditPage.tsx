@@ -29,7 +29,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
 
   const isNewDiary = !id;
   const isModified = diary ? isDiaryModified(diary, { title, content }) : (title.trim() !== '' || content.trim() !== '');
-  const isSaving = isCreating || isUpdating;
+  const isSaving = isCreating || isUpdating || isAnalyzing;
 
   // 日記データの初期化
   useEffect(() => {
@@ -54,25 +54,36 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
 
   const handleSave = async () => {
     try {
+      let diaryId: string;
+
       if (isNewDiary) {
         const newDiary = await createDiary({ title, content });
-        router.push(`/diary/${newDiary.id}`);
+        diaryId = newDiary.id;
+
+        // 新規作成の場合は、保存後に感情分析を実行してから遷移
+        if (content.trim()) {
+          try {
+            await analyzeDiary(diaryId);
+          } catch (error) {
+            console.error('感情分析に失敗しました:', error);
+          }
+        }
+
+        router.push(`/diary/${diaryId}`);
       } else if (diary) {
         await updateDiary(diary.id, { title, content });
+
+        // 既存の日記の場合は、保存後に感情分析を実行
+        if (content.trim()) {
+          try {
+            await analyzeDiary(diary.id);
+          } catch (error) {
+            console.error('感情分析に失敗しました:', error);
+          }
+        }
       }
     } catch (error) {
       console.error('保存に失敗しました:', error);
-      // TODO: エラートースト表示
-    }
-  };
-
-  const handleAnalyze = async () => {
-    if (!diary) return;
-
-    try {
-      await analyzeDiary(diary.id);
-    } catch (error) {
-      console.error('感情分析に失敗しました:', error);
       // TODO: エラートースト表示
     }
   };
@@ -89,8 +100,8 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
     return (
       <div className="flex h-screen">
         <Sidebar diaries={diaries} />
-        <div className="flex-1 flex items-center justify-center bg-white">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-700" />
         </div>
       </div>
     );
@@ -100,7 +111,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
     return (
       <div className="flex h-screen">
         <Sidebar diaries={diaries} />
-        <div className="flex-1 flex items-center justify-center bg-white">
+        <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
           <div className="text-center">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">日記が見つかりません</h2>
             <Button onClick={() => router.push('/')}>ホームに戻る</Button>
@@ -118,8 +129,8 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
       {/* メインコンテンツエリア */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* エディタエリア */}
-        <main className="flex-1 overflow-y-auto bg-white">
-          <div className="max-w-4xl mx-auto px-24 py-12">
+        <main className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--background)' }}>
+          <div className="max-w-4xl mx-auto px-24 pt-32 pb-12">
             {/* アイコンと感情分析表示 */}
             {diary?.iconData && diary?.emotionAnalysis && (
               <div className="mb-6 flex items-start gap-6">
@@ -128,7 +139,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
               </div>
             )}
 
-            {/* タイトル入力と保存ボタン */}
+            {/* タイトル入力とボタン */}
             <div className="flex items-center justify-between gap-4 mb-4">
               <input
                 type="text"
@@ -141,21 +152,16 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
                 {isModified && (
                   <span className="text-xs text-orange-600 font-medium whitespace-nowrap">未保存</span>
                 )}
-                {!isNewDiary && diary && (
-                  <Button
-                    variant="secondary"
-                    onClick={handleAnalyze}
-                    isLoading={isAnalyzing}
-                    disabled={!content.trim()}
-                  >
-                    感情分析
-                  </Button>
-                )}
                 <Button
                   onClick={handleSave}
                   isLoading={isSaving}
                   disabled={!title.trim() && !content.trim()}
+                  size="lg"
+                  className="shadow-lg hover:shadow-xl px-8"
                 >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
                   保存
                 </Button>
               </div>
@@ -200,7 +206,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
           <p className="text-gray-600">
             変更が保存されていません。このまま離れますか？
           </p>
-          
+
           <div className="flex space-x-3 justify-end">
             <Button
               variant="secondary"
@@ -208,14 +214,14 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
             >
               キャンセル
             </Button>
-            
+
             <Button
               onClick={handleSave}
               isLoading={isSaving}
             >
               保存して移動
             </Button>
-            
+
             <Button
               variant="danger"
               onClick={handleDiscardChanges}
