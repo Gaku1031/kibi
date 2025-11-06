@@ -2,7 +2,8 @@ import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as apigatewayv2_integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
@@ -94,31 +95,43 @@ export class KibiStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    // API Gateway
-    const api = new apigateway.RestApi(this, 'KibiApi', {
-      restApiName: 'kibi-api-prod',
+    // API Gateway HTTP API (required for Lambda Web Adapter)
+    const httpApi = new apigatewayv2.HttpApi(this, 'KibiApi', {
+      apiName: 'kibi-api-prod',
       description: 'Kibi API',
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
+      corsPreflight: {
+        allowOrigins: ['*'],
+        allowMethods: [
+          apigatewayv2.CorsHttpMethod.GET,
+          apigatewayv2.CorsHttpMethod.POST,
+          apigatewayv2.CorsHttpMethod.PUT,
+          apigatewayv2.CorsHttpMethod.DELETE,
+          apigatewayv2.CorsHttpMethod.OPTIONS,
+        ],
+        allowHeaders: ['Content-Type', 'Authorization'],
+        maxAge: cdk.Duration.seconds(600),
       },
     });
 
-    // Lambda Integration (Proxy mode for Lambda Web Adapter)
-    const lambdaIntegration = new apigateway.LambdaIntegration(apiFunction, {
-      proxy: true,
-    });
+    // Lambda Integration for HTTP API
+    const lambdaIntegration = new apigatewayv2_integrations.HttpLambdaIntegration(
+      'LambdaIntegration',
+      apiFunction,
+      {
+        payloadFormatVersion: apigatewayv2.PayloadFormatVersion.VERSION_2_0,
+      }
+    );
 
-    // API Routes - Proxy all requests to Lambda
-    api.root.addProxy({
-      defaultIntegration: lambdaIntegration,
-      anyMethod: true,
+    // API Routes - Catch-all route
+    httpApi.addRoutes({
+      path: '/{proxy+}',
+      methods: [apigatewayv2.HttpMethod.ANY],
+      integration: lambdaIntegration,
     });
 
     // Outputs
     new cdk.CfnOutput(this, 'ApiURL', {
-      value: api.url,
+      value: httpApi.url || '',
       description: 'API Gateway URL - Use this for NEXT_PUBLIC_API_URL in Amplify',
     });
 
