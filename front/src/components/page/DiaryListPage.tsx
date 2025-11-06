@@ -1,12 +1,15 @@
 'use client';
 
 import { useDiaryList } from '../../usecases/diary/useDiaryList';
+import { useAnalysisPolling } from '../../usecases/diary/useAnalysisPolling';
 import { DiaryList } from '../model/diary/DiaryList';
 import { Sidebar } from '../ui/Sidebar';
 import { Button } from '../ui/Button';
 
 export function DiaryListPage() {
   const { diaries, isLoading, error, refresh } = useDiaryList();
+  // ポーリングを有効化（バックグラウンドで分析状況を監視）
+  useAnalysisPolling();
 
   if (error) {
     return (

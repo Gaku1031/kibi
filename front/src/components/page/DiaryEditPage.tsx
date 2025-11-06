@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDiary, useDiaryActions } from '../../usecases/diary/useDiary';
 import { useDiaryList } from '../../usecases/diary/useDiaryList';
+import { useAnalysisPolling } from '../../usecases/diary/useAnalysisPolling';
 import { isDiaryModified } from '../../models/diary/selector';
 import { Editor } from '../ui/Editor';
 import { Button } from '../ui/Button';
@@ -20,7 +21,8 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
   const router = useRouter();
   const { diary, isLoading: isDiaryLoading } = useDiary(id);
   const { diaries } = useDiaryList();
-  const { createDiary, updateDiary, startAsyncAnalysis, pollAnalysisStatus, isCreating, isUpdating, isAnalyzing, analysisProgress } = useDiaryActions();
+  const { createDiary, updateDiary, startAsyncAnalysis, isCreating, isUpdating } = useDiaryActions();
+  const { addJob, getJobForDiary } = useAnalysisPolling();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -29,7 +31,10 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
 
   const isNewDiary = !id;
   const isModified = diary ? isDiaryModified(diary, { title, content }) : (title.trim() !== '' || content.trim() !== '');
-  const isSaving = isCreating || isUpdating || isAnalyzing;
+  const analysisJob = id ? getJobForDiary(id) : null;
+  const isSaving = isCreating || isUpdating;
+  const isAnalyzing = !!analysisJob;
+  const analysisProgress = analysisJob?.progress || 0;
   const [isContentInitialized, setIsContentInitialized] = useState(false);
 
   // 日記データの初期化
@@ -59,36 +64,33 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
       let diaryId: string;
 
       if (isNewDiary) {
+        // 新規作成: 保存してからすぐに遷移
         const newDiary = await createDiary({ title, content });
         diaryId = newDiary.id;
 
-        // 新規作成の場合は、保存後に感情分析を実行してから遷移
+        // 感情分析をバックグラウンドで開始（ページ遷移後も継続）
         if (content.trim()) {
           try {
             const jobId = await startAsyncAnalysis(diaryId);
             if (jobId) {
-              // ポーリングして分析完了を待つ
-              await pollAnalysisStatus(diaryId, jobId);
+              addJob(diaryId, jobId);
             }
           } catch (error) {
-            console.error('感情分析に失敗しました:', error);
-            // 分析失敗してもページ遷移は続行
+            console.error('感情分析の開始に失敗しました:', error);
           }
         }
 
+        // すぐに遷移
         router.push(`/diary/${diaryId}`);
       } else if (diary) {
+        // 既存日記の更新: 保存してから感情分析を開始
         await updateDiary(diary.id, { title, content });
 
-        // 既存の日記の場合は、保存後に感情分析を実行（バックグラウンド）
         if (content.trim()) {
           try {
             const jobId = await startAsyncAnalysis(diary.id);
             if (jobId) {
-              // 既存日記の編集時はバックグラウンドでポーリング
-              pollAnalysisStatus(diary.id, jobId).catch(error => {
-                console.error('感情分析に失敗しました:', error);
-              });
+              addJob(diary.id, jobId);
             }
           } catch (error) {
             console.error('感情分析の開始に失敗しました:', error);

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { DiaryEntry } from '../../../types/diary';
 import { EmotionIcon } from '../emotion/EmotionIcon';
 import { getDisplayTitle } from '../../../models/diary/selector';
+import { useAnalysisPolling } from '../../../usecases/diary/useAnalysisPolling';
 
 interface DiaryCardProps {
   diary: DiaryEntry;
@@ -9,6 +10,10 @@ interface DiaryCardProps {
 }
 
 export function DiaryCard({ diary, className = '' }: DiaryCardProps) {
+  const { getJobForDiary } = useAnalysisPolling();
+  const analysisJob = getJobForDiary(diary.id);
+  const isAnalyzing = !!analysisJob;
+
   const title = getDisplayTitle(diary);
   const formattedDate = diary.createdAt.toLocaleDateString('ja-JP', {
     month: 'numeric',
@@ -43,7 +48,11 @@ export function DiaryCard({ diary, className = '' }: DiaryCardProps) {
         {/* 感情アイコン */}
         <div className="flex items-center justify-center w-full mb-4 relative">
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-100/20 to-blue-100/20 rounded-full blur-xl"></div>
-          {diary.iconData ? (
+          {isAnalyzing ? (
+            <div className="relative w-24 h-24 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl flex items-center justify-center shadow-inner">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-300 border-t-blue-600" />
+            </div>
+          ) : diary.iconData ? (
             <div className="relative">
               <EmotionIcon icon={diary.iconData} size={100} />
             </div>
