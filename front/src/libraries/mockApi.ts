@@ -1,10 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DiaryEntry, CreateDiaryRequest, UpdateDiaryRequest } from '../types/diary';
 import type { EmotionAnalysis } from '../types/emotion';
+import type { AnalysisJobResponse, AnalysisStatusResponse } from '../repositories/diary/repository';
 import { generateEmotionIcon } from './emotionIconGenerator';
 
 // ローカルストレージキー
 const STORAGE_KEY = 'kibi_diary_entries';
+const JOBS_STORAGE_KEY = 'kibi_analysis_jobs';
 
 // モックデータの初期化
 function initializeMockData(): DiaryEntry[] {
@@ -121,20 +123,98 @@ export const mockApi = {
     await delay(2000); // 感情分析は時間がかかることをシミュレート
     const entries = initializeMockData();
     const index = entries.findIndex(entry => entry.id === id);
-    
+
     if (index === -1) return null;
-    
+
     const emotionAnalysis = generateMockEmotionAnalysis();
     const iconData = generateEmotionIcon(emotionAnalysis);
-    
+
     entries[index] = {
       ...entries[index],
       emotionAnalysis,
       iconData,
       updatedAt: new Date()
     };
-    
+
     saveMockData(entries);
     return entries[index];
+  },
+
+  // 感情分析ジョブ開始（非同期）
+  async startAnalysis(id: string): Promise<AnalysisJobResponse> {
+    await delay(300);
+    const jobId = uuidv4();
+
+    // ジョブ情報を保存（開始時刻を記録）
+    if (typeof window !== 'undefined') {
+      const jobs = JSON.parse(localStorage.getItem(JOBS_STORAGE_KEY) || '{}');
+      jobs[jobId] = {
+        diaryId: id,
+        status: 'SUBMITTED',
+        startTime: Date.now()
+      };
+      localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs));
+    }
+
+    return {
+      jobId,
+      status: 'SUBMITTED',
+      message: 'Analysis job started. Poll /analyze/status/:jobId for progress'
+    };
+  },
+
+  // 感情分析ジョブステータス確認
+  async checkAnalysisStatus(id: string, jobId: string): Promise<AnalysisStatusResponse> {
+    await delay(200);
+
+    if (typeof window === 'undefined') {
+      return { status: 'FAILED' };
+    }
+
+    const jobs = JSON.parse(localStorage.getItem(JOBS_STORAGE_KEY) || '{}');
+    const job = jobs[jobId];
+
+    if (!job || job.diaryId !== id) {
+      return { status: 'FAILED' };
+    }
+
+    const elapsed = Date.now() - job.startTime;
+
+    // 5秒経過で完了をシミュレート
+    if (elapsed >= 5000) {
+      const entries = initializeMockData();
+      const index = entries.findIndex(entry => entry.id === id);
+
+      if (index === -1) {
+        return { status: 'FAILED' };
+      }
+
+      const emotionAnalysis = generateMockEmotionAnalysis();
+      const iconData = generateEmotionIcon(emotionAnalysis);
+
+      entries[index] = {
+        ...entries[index],
+        emotionAnalysis,
+        iconData,
+        updatedAt: new Date()
+      };
+
+      saveMockData(entries);
+
+      // ジョブを削除
+      delete jobs[jobId];
+      localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs));
+
+      return {
+        status: 'COMPLETED',
+        diary: entries[index]
+      };
+    }
+
+    // 進行中
+    return {
+      status: 'IN_PROGRESS',
+      progress: Math.min(90, Math.floor((elapsed / 5000) * 100))
+    };
   }
 };
