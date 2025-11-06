@@ -140,16 +140,8 @@ jobs:
               --app-id $APP_ID \
               --environment-variables "AMPLIFY_MONOREPO_APP_ROOT=front,NEXT_PUBLIC_API_URL=${API_URL}"
 
-            # 再ビルドをトリガー
-            BRANCH_NAME="main"
-            JOB_ID=$(aws amplify start-job \
-              --app-id $APP_ID \
-              --branch-name $BRANCH_NAME \
-              --job-type RELEASE \
-              --query 'jobSummary.jobId' \
-              --output text)
-
-            echo "Triggered Amplify build: $JOB_ID"
+            echo "✓ Environment variables updated"
+            echo "Note: Rebuild Amplify manually from the console if needed"
           else
             echo "Amplify app not found. Please create it manually using AMPLIFY_SETUP.md"
           fi
