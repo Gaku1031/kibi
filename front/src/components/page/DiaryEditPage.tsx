@@ -60,18 +60,17 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
         const newDiary = await createDiary({ title, content });
         diaryId = newDiary.id;
 
-        // 新規作成の場合は、保存後に感情分析を実行
+        // 新規作成の場合は、保存後に感情分析を実行してから遷移
         if (content.trim()) {
           try {
             const jobId = await startAsyncAnalysis(diaryId);
             if (jobId) {
-              // バックグラウンドでポーリング開始
-              pollAnalysisStatus(diaryId, jobId).catch(error => {
-                console.error('感情分析に失敗しました:', error);
-              });
+              // ポーリングして分析完了を待つ
+              await pollAnalysisStatus(diaryId, jobId);
             }
           } catch (error) {
-            console.error('感情分析の開始に失敗しました:', error);
+            console.error('感情分析に失敗しました:', error);
+            // 分析失敗してもページ遷移は続行
           }
         }
 
@@ -79,12 +78,12 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
       } else if (diary) {
         await updateDiary(diary.id, { title, content });
 
-        // 既存の日記の場合は、保存後に感情分析を実行
+        // 既存の日記の場合は、保存後に感情分析を実行（バックグラウンド）
         if (content.trim()) {
           try {
             const jobId = await startAsyncAnalysis(diary.id);
             if (jobId) {
-              // バックグラウンドでポーリング開始
+              // 既存日記の編集時はバックグラウンドでポーリング
               pollAnalysisStatus(diary.id, jobId).catch(error => {
                 console.error('感情分析に失敗しました:', error);
               });

@@ -77,9 +77,30 @@ export class EmotionAnalysisService {
 
       const status = result.DocumentClassificationJobProperties?.JobStatus || 'UNKNOWN';
 
+      // ステータスに応じた進捗率を返す
+      let progress: number | undefined;
+      switch (status) {
+        case 'SUBMITTED':
+          progress = 10;
+          break;
+        case 'IN_PROGRESS':
+          progress = 50;
+          break;
+        case 'COMPLETED':
+          progress = 100;
+          break;
+        case 'FAILED':
+        case 'STOP_REQUESTED':
+        case 'STOPPED':
+          progress = 0;
+          break;
+        default:
+          progress = undefined;
+      }
+
       return {
         status,
-        progress: status === 'COMPLETED' ? 100 : undefined,
+        progress,
       };
     } catch (error) {
       console.error('Failed to check job status:', error);
