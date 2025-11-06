@@ -244,11 +244,13 @@ jobs:
             echo "Updating Amplify app: $APP_ID"
 
             # 環境変数の更新（モノレポ設定とAPI URLの両方を設定）
+            # API URLから末尾のスラッシュを削除
+            API_URL="${{ steps.api.outputs.api_url }}"
+            API_URL="${API_URL%/}"
+
             aws amplify update-app \
               --app-id $APP_ID \
-              --environment-variables \
-                AMPLIFY_MONOREPO_APP_ROOT=front \
-                NEXT_PUBLIC_API_URL=${{ steps.api.outputs.api_url }}
+              --environment-variables "AMPLIFY_MONOREPO_APP_ROOT=front,NEXT_PUBLIC_API_URL=${API_URL}"
 
             # 再ビルドをトリガー
             BRANCH_NAME="main"
