@@ -243,10 +243,12 @@ jobs:
           if [ -n "$APP_ID" ]; then
             echo "Updating Amplify app: $APP_ID"
 
-            # 環境変数の更新
+            # 環境変数の更新（モノレポ設定とAPI URLの両方を設定）
             aws amplify update-app \
               --app-id $APP_ID \
-              --environment-variables NEXT_PUBLIC_API_URL=${{ steps.api.outputs.api_url }}
+              --environment-variables \
+                AMPLIFY_MONOREPO_APP_ROOT=front \
+                NEXT_PUBLIC_API_URL=${{ steps.api.outputs.api_url }}
 
             # 再ビルドをトリガー
             BRANCH_NAME="main"
