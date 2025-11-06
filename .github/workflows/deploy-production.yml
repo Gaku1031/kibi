@@ -237,7 +237,7 @@ jobs:
         run: |
           # Amplifyアプリの取得（名前で検索）
           APP_ID=$(aws amplify list-apps \
-            --query "apps[?name=='kibi-frontend'].appId" \
+            --query "apps[?name=='kibi'].appId" \
             --output text)
 
           if [ -n "$APP_ID" ]; then
