@@ -227,7 +227,7 @@ jobs:
         id: api
         run: |
           API_URL=$(aws cloudformation describe-stacks \
-            --stack-name KibiStack \
+            --stack-name kibi-prod \
             --query 'Stacks[0].Outputs[?OutputKey==`ApiURL`].OutputValue' \
             --output text)
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
