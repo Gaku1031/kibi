@@ -79,9 +79,9 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
     };
   };
 
-  // 日記データの初期化（IDが変わったらリセット）
+  // 日記データの初期化（diaryが変わったら常に更新）
   useEffect(() => {
-    if (diary && !isContentInitialized) {
+    if (diary) {
       console.log('[DiaryEditPage] Initializing content from diary:', {
         diaryId: diary.id,
         title: diary.title,
@@ -91,7 +91,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
       setContent(diary.content);
       setIsContentInitialized(true);
     }
-  }, [diary, isContentInitialized]);
+  }, [diary]);
 
   // IDが変わったらコンテンツ初期化フラグをリセット（実際にIDが変わった場合のみ）
   useEffect(() => {
@@ -137,10 +137,6 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
           contentLength: newDiary.content.length
         });
 
-        // ローカル状態を更新（保存されたデータで上書き）
-        setTitle(newDiary.title);
-        setContent(newDiary.content);
-
         // 感情分析をバックグラウンドで開始
         if (content.trim()) {
           try {
@@ -154,13 +150,9 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
           }
         }
 
-        // コンテンツが初期化済みとマーク＋前のIDを更新（リセットされないように）
-        setIsContentInitialized(true);
-        setPreviousId(diaryId);
-
-        // URLを更新（ブラウザの履歴のみ更新、ページリロードなし）
-        console.log('[DiaryEditPage] Updating URL to:', `/diary/${diaryId}`);
-        window.history.replaceState(null, '', `/diary/${diaryId}`);
+        // ページを遷移（SWRキャッシュがあるので瞬時に表示される）
+        console.log('[DiaryEditPage] Navigating to:', `/diary/${diaryId}`);
+        router.replace(`/diary/${diaryId}`);
       } else if (diary) {
         // 既存日記の更新: 保存してから感情分析を開始
         console.log(
@@ -354,6 +346,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
             {/* エディタ */}
             {(isNewDiary || isContentInitialized) && (
               <Editor
+                key={id || 'new'} // IDが変わったらエディタを完全に再作成
                 initialContent={content}
                 onChange={(newContent) => {
                   console.log(
