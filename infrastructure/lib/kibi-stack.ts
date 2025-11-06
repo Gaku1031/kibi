@@ -96,9 +96,9 @@ export class KibiStack extends cdk.Stack {
     }));
 
     // API Gateway HTTP API (required for Lambda Web Adapter)
-    const httpApi = new apigatewayv2.HttpApi(this, 'KibiApi', {
-      apiName: 'kibi-api-prod',
-      description: 'Kibi API',
+    const httpApi = new apigatewayv2.HttpApi(this, 'KibiHttpApi', {
+      apiName: 'kibi-http-api-prod',
+      description: 'Kibi HTTP API',
       corsPreflight: {
         allowOrigins: ['*'],
         allowMethods: [
