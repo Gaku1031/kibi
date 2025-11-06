@@ -1,11 +1,13 @@
 import { DiaryEditPage } from '../../../components/page/DiaryEditPage';
 
 interface DiaryPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function DiaryPage({ params }: DiaryPageProps) {
-  return <DiaryEditPage id={params.id} />;
+export default async function DiaryPage({ params }: DiaryPageProps) {
+  const { id } = await params;
+  console.log('[DiaryPage] Rendering with ID:', id);
+  return <DiaryEditPage id={id} />;
 }

@@ -114,7 +114,14 @@ export function useAnalysisPolling() {
       ));
     } catch (error) {
       console.error('[useAnalysisPolling] Failed to poll analysis status for diary:', job.diaryId, error);
-      // エラーが発生してもジョブは保持（次回のポーリングでリトライ）
+
+      // 5分以上経過したジョブは削除（タイムアウト）
+      const elapsedMinutes = (Date.now() - job.startedAt.getTime()) / 60000;
+      if (elapsedMinutes > 5) {
+        console.error('[useAnalysisPolling] Job timeout after 5 minutes, removing:', job.diaryId);
+        removeJob(job.diaryId);
+      }
+      // それ以外はリトライのためジョブを保持
     }
   }, [removeJob, setJobs]);
 

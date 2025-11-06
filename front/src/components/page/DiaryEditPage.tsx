@@ -45,8 +45,6 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
   const isSaving = isCreating || isUpdating;
   const isAnalyzing = !!analysisJob;
   const analysisProgress = analysisJob?.progress || 0;
-  const [isContentInitialized, setIsContentInitialized] = useState(false);
-  const [previousId, setPreviousId] = useState<string | undefined>(id);
 
   // 感情分析ステータスメッセージを生成
   const getAnalysisStatusMessage = () => {
@@ -82,25 +80,20 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
   // 日記データの初期化（diaryが変わったら常に更新）
   useEffect(() => {
     if (diary) {
-      console.log('[DiaryEditPage] Initializing content from diary:', {
+      console.log('[DiaryEditPage] Loading diary content:', {
         diaryId: diary.id,
         title: diary.title,
         contentLength: diary.content.length
       });
       setTitle(diary.title);
       setContent(diary.content);
-      setIsContentInitialized(true);
+    } else if (isNewDiary) {
+      // 新規作成の場合は空にする
+      console.log('[DiaryEditPage] New diary - clearing content');
+      setTitle('');
+      setContent('');
     }
-  }, [diary]);
-
-  // IDが変わったらコンテンツ初期化フラグをリセット（実際にIDが変わった場合のみ）
-  useEffect(() => {
-    if (id !== previousId) {
-      console.log('[DiaryEditPage] ID changed from', previousId, 'to', id, '- resetting initialization flag');
-      setIsContentInitialized(false);
-      setPreviousId(id);
-    }
-  }, [id, previousId]);
+  }, [diary, isNewDiary]);
 
   // ページ離脱時の警告
   useEffect(() => {
@@ -344,20 +337,18 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
             )}
 
             {/* エディタ */}
-            {(isNewDiary || isContentInitialized) && (
-              <Editor
-                key={id || 'new'} // IDが変わったらエディタを完全に再作成
-                initialContent={content}
-                onChange={(newContent) => {
-                  console.log(
-                    "[DiaryEditPage] Editor content received, length:",
-                    newContent.length,
-                  );
-                  setContent(newContent);
-                }}
-                placeholder="今日はどんな一日でしたか？"
-              />
-            )}
+            <Editor
+              key={id || 'new'} // IDが変わったらエディタを完全に再作成
+              initialContent={content}
+              onChange={(newContent) => {
+                console.log(
+                  "[DiaryEditPage] Editor content received, length:",
+                  newContent.length,
+                );
+                setContent(newContent);
+              }}
+              placeholder="今日はどんな一日でしたか？"
+            />
           </div>
         </main>
       </div>

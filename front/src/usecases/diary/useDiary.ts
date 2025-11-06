@@ -9,14 +9,26 @@ const getDiaryKey = (id: string) => `diary-${id}`;
 const DIARY_LIST_KEY = 'diary-list';
 
 export function useDiary(id?: string) {
+  console.log('[useDiary] Hook called with id:', id);
+
   const { data, error, isLoading } = useSWR<DiaryEntry | null>(
     id ? getDiaryKey(id) : null,
-    () => id ? diaryRepository.getDiary(id) : null,
+    () => {
+      console.log('[useDiary] Fetching diary:', id);
+      return id ? diaryRepository.getDiary(id) : null;
+    },
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false
     }
   );
+
+  console.log('[useDiary] State:', {
+    hasData: !!data,
+    isLoading,
+    hasError: !!error,
+    dataId: data?.id
+  });
 
   return {
     diary: data,
