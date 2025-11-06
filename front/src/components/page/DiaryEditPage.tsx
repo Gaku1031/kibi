@@ -30,14 +30,16 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
   const isNewDiary = !id;
   const isModified = diary ? isDiaryModified(diary, { title, content }) : (title.trim() !== '' || content.trim() !== '');
   const isSaving = isCreating || isUpdating || isAnalyzing;
+  const [isContentInitialized, setIsContentInitialized] = useState(false);
 
   // 日記データの初期化
   useEffect(() => {
-    if (diary) {
+    if (diary && !isContentInitialized) {
       setTitle(diary.title);
       setContent(diary.content);
+      setIsContentInitialized(true);
     }
-  }, [diary]);
+  }, [diary, isContentInitialized]);
 
   // ページ離脱時の警告
   useEffect(() => {
@@ -225,11 +227,13 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
             )}
 
             {/* エディタ */}
-            <Editor
-              initialContent={content}
-              onChange={setContent}
-              placeholder="今日はどんな一日でしたか？"
-            />
+            {(isNewDiary || isContentInitialized) && (
+              <Editor
+                initialContent={content}
+                onChange={setContent}
+                placeholder="今日はどんな一日でしたか？"
+              />
+            )}
           </div>
         </main>
       </div>
