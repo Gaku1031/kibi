@@ -23,6 +23,7 @@ export default function BlockNoteEditorComponent({
   // 初期コンテンツをBlockNote形式にパース
   const parsedInitialContent = useMemo(() => {
     if (!initialContent) return undefined;
+    console.log('[BlockNote] Parsing initial content, length:', initialContent.length);
     return parseContent(initialContent);
   }, [initialContent]);
 
@@ -30,6 +31,17 @@ export default function BlockNoteEditorComponent({
   const editor = useCreateBlockNote({
     initialContent: parsedInitialContent,
   });
+
+  // initialContentが変わったらエディタの内容を更新
+  useEffect(() => {
+    if (!editor || !initialContent) return;
+
+    const parsed = parseContent(initialContent);
+    if (parsed && JSON.stringify(editor.document) !== JSON.stringify(parsed)) {
+      console.log('[BlockNote] Updating editor content from initialContent change');
+      editor.replaceBlocks(editor.document, parsed);
+    }
+  }, [editor, initialContent]);
 
   // コンテンツの変更を監視
   useEffect(() => {

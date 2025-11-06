@@ -110,11 +110,13 @@ export function useDiaryActions() {
   };
 
   const startAsyncAnalysis = async (id: string): Promise<string | null> => {
+    console.log('[useDiary] startAsyncAnalysis called for diary:', id);
     try {
       const response = await diaryRepository.startAnalysis(id);
+      console.log('[useDiary] startAnalysis API response:', response);
       return response.jobId;
     } catch (error) {
-      console.error('Failed to start analysis:', error);
+      console.error('[useDiary] Failed to start analysis:', error);
       return null;
     }
   };

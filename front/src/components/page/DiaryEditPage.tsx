@@ -46,6 +46,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
   const isAnalyzing = !!analysisJob;
   const analysisProgress = analysisJob?.progress || 0;
   const [isContentInitialized, setIsContentInitialized] = useState(false);
+  const [previousId, setPreviousId] = useState<string | undefined>(id);
 
   // 感情分析ステータスメッセージを生成
   const getAnalysisStatusMessage = () => {
@@ -78,14 +79,28 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
     };
   };
 
-  // 日記データの初期化
+  // 日記データの初期化（IDが変わったらリセット）
   useEffect(() => {
     if (diary && !isContentInitialized) {
+      console.log('[DiaryEditPage] Initializing content from diary:', {
+        diaryId: diary.id,
+        title: diary.title,
+        contentLength: diary.content.length
+      });
       setTitle(diary.title);
       setContent(diary.content);
       setIsContentInitialized(true);
     }
   }, [diary, isContentInitialized]);
+
+  // IDが変わったらコンテンツ初期化フラグをリセット（実際にIDが変わった場合のみ）
+  useEffect(() => {
+    if (id !== previousId) {
+      console.log('[DiaryEditPage] ID changed from', previousId, 'to', id, '- resetting initialization flag');
+      setIsContentInitialized(false);
+      setPreviousId(id);
+    }
+  }, [id, previousId]);
 
   // ページ離脱時の警告
   useEffect(() => {
@@ -106,7 +121,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
       let diaryId: string;
 
       if (isNewDiary) {
-        // 新規作成: 保存してからすぐに遷移
+        // 新規作成: 保存してページを更新
         console.log(
           "[DiaryEditPage] Creating new diary with title:",
           title,
@@ -116,11 +131,22 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
         const newDiary = await createDiary({ title, content });
         diaryId = newDiary.id;
 
-        // 感情分析をバックグラウンドで開始（ページ遷移後も継続）
+        console.log('[DiaryEditPage] New diary created:', {
+          id: diaryId,
+          title: newDiary.title,
+          contentLength: newDiary.content.length
+        });
+
+        // ローカル状態を更新（保存されたデータで上書き）
+        setTitle(newDiary.title);
+        setContent(newDiary.content);
+
+        // 感情分析をバックグラウンドで開始
         if (content.trim()) {
           try {
             const jobId = await startAsyncAnalysis(diaryId);
             if (jobId) {
+              console.log('[DiaryEditPage] Starting analysis job:', jobId);
               addJob(diaryId, jobId);
             }
           } catch (error) {
@@ -128,8 +154,13 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
           }
         }
 
-        // すぐに遷移
-        router.push(`/diary/${diaryId}`);
+        // コンテンツが初期化済みとマーク＋前のIDを更新（リセットされないように）
+        setIsContentInitialized(true);
+        setPreviousId(diaryId);
+
+        // URLを更新（ブラウザの履歴のみ更新、ページリロードなし）
+        console.log('[DiaryEditPage] Updating URL to:', `/diary/${diaryId}`);
+        window.history.replaceState(null, '', `/diary/${diaryId}`);
       } else if (diary) {
         // 既存日記の更新: 保存してから感情分析を開始
         console.log(
