@@ -1,18 +1,54 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
-import { useRecoilState } from 'recoil';
+import { useEffect, useCallback, useState } from 'react';
 import { mutate } from 'swr';
-import { analysisJobsState } from '../../stores/analysisJobs';
 import { diaryRepository } from '../../repositories/diary/repository';
 import type { AnalysisJob } from '../../types/analysisJob';
 
 const DIARY_LIST_KEY = 'diary-list';
 const getDiaryKey = (id: string) => `diary-${id}`;
 const POLLING_INTERVAL = 3000; // 3秒
+const STORAGE_KEY = 'kibi_analysis_jobs';
+
+// localStorageからジョブを取得
+function getJobsFromStorage(): AnalysisJob[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    const jobs = JSON.parse(stored);
+    // 日付文字列をDateオブジェクトに変換
+    return jobs.map((job: any) => ({
+      ...job,
+      startedAt: new Date(job.startedAt)
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// localStorageにジョブを保存
+function saveJobsToStorage(jobs: AnalysisJob[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
+  } catch (error) {
+    console.error('Failed to save jobs to storage:', error);
+  }
+}
 
 export function useAnalysisPolling() {
-  const [jobs, setJobs] = useRecoilState(analysisJobsState);
+  const [jobs, setJobs] = useState<AnalysisJob[]>([]);
+
+  // マウント時にlocalStorageから読み込み
+  useEffect(() => {
+    setJobs(getJobsFromStorage());
+  }, []);
+
+  // ジョブが変更されたらlocalStorageに保存
+  useEffect(() => {
+    saveJobsToStorage(jobs);
+  }, [jobs]);
 
   const addJob = useCallback((diaryId: string, jobId: string) => {
     setJobs(prev => {
@@ -28,11 +64,11 @@ export function useAnalysisPolling() {
         progress: 10,
       }];
     });
-  }, [setJobs]);
+  }, []);
 
   const removeJob = useCallback((diaryId: string) => {
     setJobs(prev => prev.filter(j => j.diaryId !== diaryId));
-  }, [setJobs]);
+  }, []);
 
   const pollJob = useCallback(async (job: AnalysisJob) => {
     try {
