@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { serve } from "@hono/node-server";
 import diaryRoutes from "./routes/diary.js";
 
 const app = new Hono();
@@ -35,10 +36,12 @@ app.onError((err, c) => {
   return c.json({ error: "Internal Server Error" }, 500);
 });
 
-// Lambda Web Adapter用のポート設定
+// Lambda Web Adapter用のHTTPサーバー起動
 const port = parseInt(process.env.PORT || "8080");
 
-export default {
-  port,
+console.log(`Starting server on port ${port}`);
+
+serve({
   fetch: app.fetch,
-};
+  port,
+});
