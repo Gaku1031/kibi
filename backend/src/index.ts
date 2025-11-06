@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { handle } from "@hono/aws-lambda";
+import { handle } from "hono/aws-lambda";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import diaryRoutes from "./routes/diary.js";
