@@ -46,14 +46,11 @@ export class KibiStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Lambda Function (Docker with Lambda Web Adapter)
+    // Lambda Function (Docker with Hono AWS Lambda adapter)
     const envVars: { [key: string]: string } = {
       DIARY_TABLE_NAME: diaryTable.tableName,
       EMOTION_ANALYSIS_TABLE_NAME: emotionAnalysisTable.tableName,
       CONTENT_BUCKET_NAME: contentBucket.bucketName,
-      PORT: '8080',
-      READINESS_CHECK_PORT: '8080',
-      READINESS_CHECK_PATH: '/health',
     };
 
     // Comprehend非同期ジョブ用のIAMロール

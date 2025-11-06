@@ -1,13 +1,12 @@
 import { Hono } from "hono";
+import { handle } from "@hono/aws-lambda";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { serve } from "@hono/node-server";
 import diaryRoutes from "./routes/diary.js";
 
-console.log("=== Application Starting ===");
+console.log("=== Lambda Handler Starting ===");
 console.log("Environment:", {
   NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
   AWS_REGION: process.env.AWS_REGION,
   AWS_LAMBDA_FUNCTION_NAME: process.env.AWS_LAMBDA_FUNCTION_NAME,
 });
@@ -61,18 +60,5 @@ app.onError((err, c) => {
   return c.json({ error: "Internal Server Error", message: err.message }, 500);
 });
 
-// Lambda Web Adapter用のHTTPサーバー起動
-const port = parseInt(process.env.PORT || "8080");
-
-console.log(`Starting HTTP server on port ${port}`);
-
-try {
-  serve({
-    fetch: app.fetch,
-    port,
-  });
-  console.log(`✓ Server is listening on port ${port}`);
-} catch (error) {
-  console.error("Failed to start server:", error);
-  process.exit(1);
-}
+// Lambda handler export
+export const handler = handle(app);
