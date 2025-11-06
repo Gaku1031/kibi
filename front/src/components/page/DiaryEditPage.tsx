@@ -20,7 +20,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
   const router = useRouter();
   const { diary, isLoading: isDiaryLoading } = useDiary(id);
   const { diaries } = useDiaryList();
-  const { createDiary, updateDiary, analyzeDiary, isCreating, isUpdating, isAnalyzing } = useDiaryActions();
+  const { createDiary, updateDiary, startAsyncAnalysis, pollAnalysisStatus, isCreating, isUpdating, isAnalyzing, analysisProgress } = useDiaryActions();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -60,12 +60,18 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
         const newDiary = await createDiary({ title, content });
         diaryId = newDiary.id;
 
-        // 新規作成の場合は、保存後に感情分析を実行してから遷移
+        // 新規作成の場合は、保存後に感情分析を実行
         if (content.trim()) {
           try {
-            await analyzeDiary(diaryId);
+            const jobId = await startAsyncAnalysis(diaryId);
+            if (jobId) {
+              // バックグラウンドでポーリング開始
+              pollAnalysisStatus(diaryId, jobId).catch(error => {
+                console.error('感情分析に失敗しました:', error);
+              });
+            }
           } catch (error) {
-            console.error('感情分析に失敗しました:', error);
+            console.error('感情分析の開始に失敗しました:', error);
           }
         }
 
@@ -76,9 +82,15 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
         // 既存の日記の場合は、保存後に感情分析を実行
         if (content.trim()) {
           try {
-            await analyzeDiary(diary.id);
+            const jobId = await startAsyncAnalysis(diary.id);
+            if (jobId) {
+              // バックグラウンドでポーリング開始
+              pollAnalysisStatus(diary.id, jobId).catch(error => {
+                console.error('感情分析に失敗しました:', error);
+              });
+            }
           } catch (error) {
-            console.error('感情分析に失敗しました:', error);
+            console.error('感情分析の開始に失敗しました:', error);
           }
         }
       }
@@ -139,6 +151,25 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
               </div>
             )}
 
+            {/* 感情分析中の表示 */}
+            {isAnalyzing && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent" />
+                  <span className="text-blue-900 font-medium">感情分析中...</span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-blue-600 h-full transition-all duration-300 ease-out"
+                    style={{ width: `${analysisProgress}%` }}
+                  />
+                </div>
+                <p className="text-sm text-blue-700 mt-2">
+                  {analysisProgress < 100 ? `処理中 (${analysisProgress}%)` : '完了しました'}
+                </p>
+              </div>
+            )}
+
             {/* タイトル入力とボタン */}
             <div className="flex items-center justify-between gap-4 mb-4">
               <input
@@ -177,7 +208,15 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
                 <span>
                   更新: {diary.updatedAt.toLocaleDateString('ja-JP')}
                 </span>
-                {diary.emotionAnalysis && (
+                {isAnalyzing ? (
+                  <>
+                    <span>•</span>
+                    <span className="text-blue-600 flex items-center gap-1">
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
+                      分析中
+                    </span>
+                  </>
+                ) : diary.emotionAnalysis && (
                   <>
                     <span>•</span>
                     <span className="text-blue-600">感情分析済み</span>
