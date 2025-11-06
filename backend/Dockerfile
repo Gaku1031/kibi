@@ -34,10 +34,11 @@ RUN npm ci --only=production
 # ビルドされたコードをコピー
 COPY --from=builder /app/dist ./dist
 
-# 環境変数を設定
-ENV AWS_LAMBDA_EXEC_WRAPPER=/opt/bootstrap
+# 環境変数を設定 (Lambda Web Adapter用)
 ENV PORT=8080
 ENV NODE_ENV=production
+ENV READINESS_CHECK_PORT=8080
+ENV READINESS_CHECK_PATH=/health
 
 # アプリケーションを起動
 CMD ["node", "dist/index.js"]

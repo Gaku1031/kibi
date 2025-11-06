@@ -50,8 +50,9 @@ export class KibiStack extends cdk.Stack {
       DIARY_TABLE_NAME: diaryTable.tableName,
       EMOTION_ANALYSIS_TABLE_NAME: emotionAnalysisTable.tableName,
       CONTENT_BUCKET_NAME: contentBucket.bucketName,
-      AWS_LAMBDA_EXEC_WRAPPER: '/opt/bootstrap',
       PORT: '8080',
+      READINESS_CHECK_PORT: '8080',
+      READINESS_CHECK_PATH: '/health',
     };
 
     // Comprehend非同期ジョブ用のIAMロール
