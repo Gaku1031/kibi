@@ -44,8 +44,8 @@ jobs:
           ENDPOINT_INFO=$(aws comprehend list-endpoints --output json)
           set -e
 
-          # エンドポイント名でフィルタリング（jqを使用）
-          ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
+          # エンドポイントARNで検索（EndpointNameがnullの場合があるため）
+          ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointArn | contains(\"${ENDPOINT_NAME}\")) | .EndpointArn")
 
           if [ -n "$ENDPOINT_ARN" ]; then
             echo "Endpoint found: $ENDPOINT_ARN"
@@ -96,12 +96,12 @@ jobs:
               # 既に存在する場合は取得
               if echo "$CREATE_OUTPUT" | grep -q "ResourceInUseException"; then
                 echo "Endpoint already exists (race condition). Fetching existing endpoint..."
-                ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
+                ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointArn | contains(\"${ENDPOINT_NAME}\")) | .EndpointArn")
                 if [ -z "$ENDPOINT_ARN" ] || [ "$ENDPOINT_ARN" = "null" ]; then
                   # リスト再取得
                   echo "Re-fetching endpoint list..."
                   ENDPOINT_INFO=$(aws comprehend list-endpoints --output json)
-                  ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
+                  ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointArn | contains(\"${ENDPOINT_NAME}\")) | .EndpointArn")
 
                   # まだ見つからない場合はエラー
                   if [ -z "$ENDPOINT_ARN" ] || [ "$ENDPOINT_ARN" = "null" ]; then
@@ -148,7 +148,26 @@ jobs:
         working-directory: infrastructure
         run: |
           npm ci
-          npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID || '223708988018' }}/${{ env.AWS_REGION }}
+
+          echo "Bootstrapping CDK environment..."
+          set +e
+          BOOTSTRAP_OUTPUT=$(npx cdk bootstrap aws://223708988018/${{ env.AWS_REGION }} 2>&1)
+          BOOTSTRAP_EXIT_CODE=$?
+          set -e
+
+          echo "$BOOTSTRAP_OUTPUT"
+
+          if [ $BOOTSTRAP_EXIT_CODE -ne 0 ]; then
+            # 既にbootstrapされている場合は無視
+            if echo "$BOOTSTRAP_OUTPUT" | grep -q "already bootstrapped"; then
+              echo "Environment already bootstrapped"
+            else
+              echo "Bootstrap failed with exit code $BOOTSTRAP_EXIT_CODE"
+              exit 1
+            fi
+          else
+            echo "Bootstrap completed successfully"
+          fi
 
       - name: Deploy infrastructure
         working-directory: infrastructure
