@@ -104,14 +104,13 @@ export class KibiStack extends cdk.Stack {
       },
     });
 
-    // Lambda Integration
+    // Lambda Integration (Proxy mode for Lambda Web Adapter)
     const lambdaIntegration = new apigateway.LambdaIntegration(apiFunction, {
-      requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
+      proxy: true,
     });
 
-    // API Routes
-    const apiResource = api.root.addResource('api');
-    apiResource.addProxy({
+    // API Routes - Proxy all requests to Lambda
+    api.root.addProxy({
       defaultIntegration: lambdaIntegration,
       anyMethod: true,
     });

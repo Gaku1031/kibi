@@ -16,10 +16,6 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "kibi - 感情の機微を発見する日記サービス",
   description: "Notionのような快適な書き心地で、日記を書くとその文面からそのときの感情を分析してくれる日記サービス",
-  icons: {
-    icon: '/icon.png',
-    apple: '/icon.png',
-  },
 };
 
 export default function RootLayout({

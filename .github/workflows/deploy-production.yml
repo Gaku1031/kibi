@@ -7,8 +7,6 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  COMPREHEND_CLASSIFIER_ARN: arn:aws:comprehend:ap-northeast-1:223708988018:document-classifier/kibi-emotion-classifier
-  ENDPOINT_NAME: kibi-emotion-endpoint
 
 jobs:
   deploy:
@@ -43,114 +41,6 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-
-      - name: Check and create Comprehend endpoint
-        id: comprehend
-        run: |
-          # 既存エンドポイントを取得（エラーを無視）
-          set +e
-          ENDPOINT_INFO=$(aws comprehend list-endpoints --output json)
-          set -e
-
-          # エンドポイントARNで検索（EndpointNameがnullの場合があるため）
-          ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointArn | contains(\"${ENDPOINT_NAME}\")) | .EndpointArn")
-
-          if [ -n "$ENDPOINT_ARN" ]; then
-            echo "Endpoint found: $ENDPOINT_ARN"
-
-            # ステータス確認
-            STATUS=$(aws comprehend describe-endpoint \
-              --endpoint-arn "$ENDPOINT_ARN" \
-              --query 'EndpointProperties.Status' \
-              --output text)
-
-            echo "Current status: $STATUS"
-
-            # IN_SERVICE以外の場合は待機
-            if [ "$STATUS" != "IN_SERVICE" ]; then
-              echo "Waiting for endpoint to become IN_SERVICE..."
-              for i in {1..90}; do
-                sleep 20
-                STATUS=$(aws comprehend describe-endpoint \
-                  --endpoint-arn "$ENDPOINT_ARN" \
-                  --query 'EndpointProperties.Status' \
-                  --output text)
-
-                echo "Status check $i/90: $STATUS"
-
-                if [ "$STATUS" = "IN_SERVICE" ]; then
-                  echo "Endpoint is ready!"
-                  break
-                elif [ "$STATUS" = "FAILED" ]; then
-                  echo "Error: Endpoint is in FAILED state"
-                  exit 1
-                fi
-              done
-            fi
-          else
-            echo "No existing endpoint found. Creating new endpoint..."
-
-            # エンドポイント作成（エラーハンドリング）
-            set +e
-            CREATE_OUTPUT=$(aws comprehend create-endpoint \
-              --endpoint-name "${ENDPOINT_NAME}" \
-              --model-arn "${COMPREHEND_CLASSIFIER_ARN}" \
-              --desired-inference-units 1 \
-              --output json 2>&1)
-            CREATE_EXIT_CODE=$?
-            set -e
-
-            if [ $CREATE_EXIT_CODE -ne 0 ]; then
-              # 既に存在する場合は取得
-              if echo "$CREATE_OUTPUT" | grep -q "ResourceInUseException"; then
-                echo "Endpoint already exists (race condition). Fetching existing endpoint..."
-                ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointArn | contains(\"${ENDPOINT_NAME}\")) | .EndpointArn")
-                if [ -z "$ENDPOINT_ARN" ] || [ "$ENDPOINT_ARN" = "null" ]; then
-                  # リスト再取得
-                  echo "Re-fetching endpoint list..."
-                  ENDPOINT_INFO=$(aws comprehend list-endpoints --output json)
-                  ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointArn | contains(\"${ENDPOINT_NAME}\")) | .EndpointArn")
-
-                  # まだ見つからない場合はエラー
-                  if [ -z "$ENDPOINT_ARN" ] || [ "$ENDPOINT_ARN" = "null" ]; then
-                    echo "Error: Endpoint exists but could not retrieve ARN"
-                    echo "Available endpoints:"
-                    echo "$ENDPOINT_INFO" | jq '.EndpointPropertiesList[] | {EndpointName, EndpointArn}'
-                    exit 1
-                  fi
-                fi
-              else
-                echo "Error creating endpoint: $CREATE_OUTPUT"
-                exit 1
-              fi
-            else
-              ENDPOINT_ARN=$(echo "$CREATE_OUTPUT" | jq -r '.EndpointArn')
-              echo "Created new endpoint: $ENDPOINT_ARN"
-            fi
-
-            # エンドポイントがIN_SERVICEになるまで待機
-            echo "Waiting for endpoint to become available..."
-            for i in {1..90}; do
-              sleep 20
-              STATUS=$(aws comprehend describe-endpoint \
-                --endpoint-arn "$ENDPOINT_ARN" \
-                --query 'EndpointProperties.Status' \
-                --output text)
-
-              echo "Status check $i/90: $STATUS"
-
-              if [ "$STATUS" = "IN_SERVICE" ]; then
-                echo "Endpoint is ready!"
-                break
-              elif [ "$STATUS" = "FAILED" ]; then
-                echo "Error: Endpoint creation failed"
-                exit 1
-              fi
-            done
-          fi
-
-          # 環境変数として出力
-          echo "endpoint_arn=$ENDPOINT_ARN" >> $GITHUB_OUTPUT
 
       - name: Bootstrap CDK environment
         working-directory: infrastructure
@@ -218,8 +108,6 @@ jobs:
 
       - name: Deploy infrastructure
         working-directory: infrastructure
-        env:
-          COMPREHEND_ENDPOINT_ARN: ${{ steps.comprehend.outputs.endpoint_arn }}
         run: |
           npm run deploy -- --require-approval never
 
@@ -269,8 +157,7 @@ jobs:
       - name: Deployment summary
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Comprehend Endpoint**: ${{ steps.comprehend.outputs.endpoint_arn }}" >> $GITHUB_STEP_SUMMARY
           echo "- **API URL**: ${{ steps.api.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note**: Comprehend endpoint costs ~$40/month while running." >> $GITHUB_STEP_SUMMARY
+          echo "**Note**: Using async Comprehend jobs (no endpoint, pay-per-use)." >> $GITHUB_STEP_SUMMARY
