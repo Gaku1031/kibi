@@ -37,6 +37,33 @@ console.log('API Configuration:', {
 
 const USE_MOCK = process.env.NODE_ENV === 'development';
 
+// 日付文字列をDateオブジェクトに変換するヘルパー関数
+function convertDatesToObjects(data: any): any {
+  if (!data) return data;
+
+  if (Array.isArray(data)) {
+    return data.map(convertDatesToObjects);
+  }
+
+  if (typeof data === 'object') {
+    const converted: any = {};
+    for (const key in data) {
+      const value = data[key];
+      // createdAt, updatedAt などの日付フィールドを変換
+      if ((key === 'createdAt' || key === 'updatedAt') && typeof value === 'string') {
+        converted[key] = new Date(value);
+      } else if (typeof value === 'object') {
+        converted[key] = convertDatesToObjects(value);
+      } else {
+        converted[key] = value;
+      }
+    }
+    return converted;
+  }
+
+  return data;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -58,7 +85,8 @@ class ApiClient {
       throw new Error(`API request failed: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return convertDatesToObjects(data);
   }
 
   async getDiaries(): Promise<DiaryEntry[]> {
