@@ -97,9 +97,19 @@ jobs:
               if echo "$CREATE_OUTPUT" | grep -q "ResourceInUseException"; then
                 echo "Endpoint already exists (race condition). Fetching existing endpoint..."
                 ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
-                if [ -z "$ENDPOINT_ARN" ]; then
+                if [ -z "$ENDPOINT_ARN" ] || [ "$ENDPOINT_ARN" = "null" ]; then
                   # リスト再取得
-                  ENDPOINT_ARN=$(aws comprehend list-endpoints --output json | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
+                  echo "Re-fetching endpoint list..."
+                  ENDPOINT_INFO=$(aws comprehend list-endpoints --output json)
+                  ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
+
+                  # まだ見つからない場合はエラー
+                  if [ -z "$ENDPOINT_ARN" ] || [ "$ENDPOINT_ARN" = "null" ]; then
+                    echo "Error: Endpoint exists but could not retrieve ARN"
+                    echo "Available endpoints:"
+                    echo "$ENDPOINT_INFO" | jq '.EndpointPropertiesList[] | {EndpointName, EndpointArn}'
+                    exit 1
+                  fi
                 fi
               else
                 echo "Error creating endpoint: $CREATE_OUTPUT"
@@ -134,12 +144,17 @@ jobs:
           # 環境変数として出力
           echo "endpoint_arn=$ENDPOINT_ARN" >> $GITHUB_OUTPUT
 
+      - name: Bootstrap CDK (if needed)
+        working-directory: infrastructure
+        run: |
+          npm ci
+          npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID || '223708988018' }}/${{ env.AWS_REGION }}
+
       - name: Deploy infrastructure
         working-directory: infrastructure
         env:
           COMPREHEND_ENDPOINT_ARN: ${{ steps.comprehend.outputs.endpoint_arn }}
         run: |
-          npm ci
           npm run deploy -- --require-approval never
 
       - name: Get API URL
