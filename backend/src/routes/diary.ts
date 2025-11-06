@@ -326,7 +326,14 @@ app.get('/:id/analyze/status/:jobId', async (c) => {
       console.log('[Analyze Status] Generating emotion icon', {
         diaryId: id,
         seed,
-        emotions: analysis.emotions
+        joy: analysis.joy,
+        trust: analysis.trust,
+        fear: analysis.fear,
+        surprise: analysis.surprise,
+        sadness: analysis.sadness,
+        disgust: analysis.disgust,
+        anger: analysis.anger,
+        anticipation: analysis.anticipation
       });
 
       const iconData = generateEmotionIcon(analysis, seed);
