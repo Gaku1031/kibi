@@ -39,17 +39,20 @@ jobs:
       - name: Check and create Comprehend endpoint
         id: comprehend
         run: |
-          # エンドポイントの存在確認（全ステータス）
-          ENDPOINT_ARN=$(aws comprehend list-endpoints \
-            --query "EndpointPropertiesList[?EndpointName=='${ENDPOINT_NAME}'].EndpointArn" \
-            --output text)
+          # 既存エンドポイントを取得（エラーを無視）
+          set +e
+          ENDPOINT_INFO=$(aws comprehend list-endpoints --output json)
+          set -e
+
+          # エンドポイント名でフィルタリング（jqを使用）
+          ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
 
           if [ -n "$ENDPOINT_ARN" ]; then
             echo "Endpoint found: $ENDPOINT_ARN"
 
             # ステータス確認
             STATUS=$(aws comprehend describe-endpoint \
-              --endpoint-arn $ENDPOINT_ARN \
+              --endpoint-arn "$ENDPOINT_ARN" \
               --query 'EndpointProperties.Status' \
               --output text)
 
@@ -57,14 +60,15 @@ jobs:
 
             # IN_SERVICE以外の場合は待機
             if [ "$STATUS" != "IN_SERVICE" ]; then
-              echo "Waiting for endpoint to become available..."
+              echo "Waiting for endpoint to become IN_SERVICE..."
               for i in {1..90}; do
+                sleep 20
                 STATUS=$(aws comprehend describe-endpoint \
-                  --endpoint-arn $ENDPOINT_ARN \
+                  --endpoint-arn "$ENDPOINT_ARN" \
                   --query 'EndpointProperties.Status' \
                   --output text)
 
-                echo "Current status: $STATUS (attempt $i/90)"
+                echo "Status check $i/90: $STATUS"
 
                 if [ "$STATUS" = "IN_SERVICE" ]; then
                   echo "Endpoint is ready!"
@@ -73,32 +77,49 @@ jobs:
                   echo "Error: Endpoint is in FAILED state"
                   exit 1
                 fi
-
-                sleep 20
               done
             fi
           else
-            echo "Comprehend endpoint not found. Creating new endpoint..."
+            echo "No existing endpoint found. Creating new endpoint..."
 
-            # エンドポイント作成
+            # エンドポイント作成（エラーハンドリング）
+            set +e
             CREATE_OUTPUT=$(aws comprehend create-endpoint \
-              --endpoint-name ${ENDPOINT_NAME} \
-              --model-arn ${COMPREHEND_CLASSIFIER_ARN} \
+              --endpoint-name "${ENDPOINT_NAME}" \
+              --model-arn "${COMPREHEND_CLASSIFIER_ARN}" \
               --desired-inference-units 1 \
-              --output json)
+              --output json 2>&1)
+            CREATE_EXIT_CODE=$?
+            set -e
 
-            ENDPOINT_ARN=$(echo $CREATE_OUTPUT | jq -r '.EndpointArn')
-            echo "Created endpoint: $ENDPOINT_ARN"
+            if [ $CREATE_EXIT_CODE -ne 0 ]; then
+              # 既に存在する場合は取得
+              if echo "$CREATE_OUTPUT" | grep -q "ResourceInUseException"; then
+                echo "Endpoint already exists (race condition). Fetching existing endpoint..."
+                ENDPOINT_ARN=$(echo "$ENDPOINT_INFO" | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
+                if [ -z "$ENDPOINT_ARN" ]; then
+                  # リスト再取得
+                  ENDPOINT_ARN=$(aws comprehend list-endpoints --output json | jq -r ".EndpointPropertiesList[] | select(.EndpointName==\"${ENDPOINT_NAME}\") | .EndpointArn")
+                fi
+              else
+                echo "Error creating endpoint: $CREATE_OUTPUT"
+                exit 1
+              fi
+            else
+              ENDPOINT_ARN=$(echo "$CREATE_OUTPUT" | jq -r '.EndpointArn')
+              echo "Created new endpoint: $ENDPOINT_ARN"
+            fi
 
-            # エンドポイントがIN_SERVICEになるまで待機（最大30分）
+            # エンドポイントがIN_SERVICEになるまで待機
             echo "Waiting for endpoint to become available..."
             for i in {1..90}; do
+              sleep 20
               STATUS=$(aws comprehend describe-endpoint \
-                --endpoint-arn $ENDPOINT_ARN \
+                --endpoint-arn "$ENDPOINT_ARN" \
                 --query 'EndpointProperties.Status' \
                 --output text)
 
-              echo "Current status: $STATUS (attempt $i/90)"
+              echo "Status check $i/90: $STATUS"
 
               if [ "$STATUS" = "IN_SERVICE" ]; then
                 echo "Endpoint is ready!"
@@ -107,8 +128,6 @@ jobs:
                 echo "Error: Endpoint creation failed"
                 exit 1
               fi
-
-              sleep 20
             done
           fi
 
