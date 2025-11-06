@@ -1,137 +1,185 @@
-# Kibi デプロイメントガイド
+# Kibi デプロイ手順
 
-## 前提条件
+## 🏗️ アーキテクチャ
+
+- **バックエンド**: AWS Lambda + API Gateway (CDKでデプロイ)
+- **フロントエンド**: AWS Amplify Hosting (GitHubと連携)
+- **データベース**: DynamoDB
+- **AI**: AWS Comprehend + Translate
+
+## 🚀 デプロイ手順
+
+### 1. 前提条件
 
 - AWS CLI設定済み
-- Node.js 20以上
-- Docker Desktop起動済み
-- AWS CDK CLI (`npm install -g aws-cdk`)
+- GitHub リポジトリ
+- Node.js 20+
 
-## デプロイ手順
+### 2. GitHub Actions用のIAM設定
 
-### 1. Comprehend学習データの生成（初回のみ）
+```bash
+# 1. OpenID Connect プロバイダーを作成
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
+  --client-id-list sts.amazonaws.com
+
+# 2. IAMロールを作成（trust-policy.jsonを使用）
+aws iam create-role \
+  --role-name GitHubActionsRole \
+  --assume-role-policy-document file://trust-policy.json
+
+# 3. 必要な権限をアタッチ
+aws iam attach-role-policy \
+  --role-name GitHubActionsRole \
+  --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+```
+
+**trust-policy.json**:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:YOUR_USERNAME/kibi:ref:refs/heads/main"
+        }
+      }
+    }
+  ]
+}
+```
+
+### 3. GitHub Secrets設定
+
+リポジトリの Settings > Secrets and variables > Actions で設定：
+
+- `AWS_ROLE_ARN`: `arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsRole`
+
+### 4. バックエンドデプロイ
+
+```bash
+# mainブランチにプッシュすると自動デプロイ
+git push origin main
+```
+
+または手動デプロイ：
+
+```bash
+cd infrastructure
+npm install
+npx cdk bootstrap
+npx cdk deploy
+```
+
+### 5. フロントエンドデプロイ（AWS Amplify）
+
+#### 5.1 Amplify Hostingセットアップ
+
+1. [AWS Amplify Console](https://console.aws.amazon.com/amplify/) にアクセス
+2. 「新しいアプリ」→「ホスティング」を選択
+3. GitHubを選択してリポジトリを接続
+4. ブランチ: `main` を選択
+5. ビルド設定で `amplify.yml` を使用
+
+#### 5.2 環境変数設定
+
+Amplify Console で以下の環境変数を設定：
+
+```
+NEXT_PUBLIC_API_URL=https://YOUR_API_ID.execute-api.ap-northeast-1.amazonaws.com/prod
+```
+
+**重要**: URLの末尾にスラッシュを**つけないでください**。
+
+API URLは GitHub Actions の出力またはCloudFormationスタックの出力から取得できます。
+
+#### 5.3 デプロイ実行
+
+Amplify Console で「デプロイ」をクリックするか、mainブランチにプッシュすると自動デプロイされます。
+
+### 6. Comprehendカスタム分類モデル（オプション）
+
+#### 6.1 学習データ準備
 
 ```bash
 cd data/comprehend-training
 node generate-training-data.js
 ```
 
-これにより `emotion-training-data.csv` が生成されます（各感情150サンプル、合計1200サンプル）。
-
-### 2. Comprehendカスタム分類器の作成（手動、初回のみ）
-
-1. AWSコンソールでS3バケットを作成し、`emotion-training-data.csv`をアップロード
-2. Amazon Comprehend コンソールで「Custom classification」を選択
-3. 新しい分類器を作成:
-   - Training data: アップロードしたCSVファイルを指定
-   - Language: English
-   - Classifier mode: Multi-class mode
-4. トレーニング完了まで待機（20-30分程度）
-5. エンドポイントを作成
-6. バックエンドコードでエンドポイントARNを使用するよう更新
-
-### 3. フロントエンドのビルド
+#### 6.2 S3にアップロード
 
 ```bash
-cd front
-npm install
-npm run build
+aws s3 cp emotion-training-data.csv s3://YOUR_BUCKET/training-data/
 ```
 
-これにより `out/` ディレクトリに静的ファイルが生成されます。
+#### 6.3 Comprehendでモデル学習
 
-### 4. バックエンドとインフラのデプロイ
+1. [Amazon Comprehend Console](https://console.aws.amazon.com/comprehend/) にアクセス
+2. 「カスタム分類」→「分類器を作成」
+3. 学習データを指定してモデルを作成
+4. エンドポイントを作成
+
+#### 6.4 環境変数更新
+
+Lambda関数の環境変数に追加：
+```
+COMPREHEND_ENDPOINT_ARN=arn:aws:comprehend:ap-northeast-1:ACCOUNT:document-classifier-endpoint/ENDPOINT_NAME
+```
+
+## 🔧 トラブルシューティング
+
+### CDKブートストラップエラー
 
 ```bash
 cd infrastructure
-npm install
-npm run build
-cdk bootstrap  # 初回のみ
-cdk deploy
+npx cdk bootstrap --require-approval never
 ```
 
-### 5. 環境変数の設定
+### Amplifyビルドエラー
 
-デプロイ後、以下の出力が表示されます:
-- `CloudFrontURL`: フロントエンドのURL
-- `ApiURL`: API GatewayのURL
+1. Node.js バージョンを確認（20推奨）
+2. `amplify.yml` の設定を確認
+3. 環境変数 `NEXT_PUBLIC_API_URL` を確認
 
-フロントエンドの環境変数を設定する場合は、`front/.env.production`を作成:
+### API接続エラー
 
-```env
-NEXT_PUBLIC_API_URL=https://your-cloudfront-domain.cloudfront.net
-```
+1. CORS設定を確認
+2. API Gateway URLを確認
+3. Lambda関数のログを確認
 
-## デプロイ後の確認
+## 📊 コスト見積もり
 
-1. CloudFront URLにアクセスしてフロントエンドが表示されることを確認
-2. 日記を作成し、保存が動作することを確認
-3. 感情分析を実行し、アイコンが生成されることを確認
+- **Lambda**: ~$5-10/月（軽い使用）
+- **DynamoDB**: ~$2-5/月（オンデマンド）
+- **API Gateway**: ~$3-7/月
+- **Amplify Hosting**: ~$1-3/月
+- **Comprehend**: ~$1-3/月（分析頻度による）
 
-## 更新時のデプロイ
+**合計**: 約 $12-28/月
 
-### フロントエンドのみ更新
+## 🔄 更新手順
 
+### バックエンド更新
 ```bash
-cd front
-npm run build
-cd ../infrastructure
-cdk deploy
+git push origin main  # 自動デプロイ
 ```
 
-### バックエンドのみ更新
-
+### フロントエンド更新
 ```bash
-cd infrastructure
-cdk deploy
+git push origin main  # Amplifyが自動デプロイ
 ```
 
-Dockerイメージが自動的にビルドされ、Lambdaが更新されます。
+## 🛡️ セキュリティ
 
-### インフラ設定の更新
-
-```bash
-cd infrastructure
-npm run build
-cdk deploy
-```
-
-## トラブルシューティング
-
-### Lambda関数がタイムアウトする
-
-- `infrastructure/lib/kibi-stack.ts` でタイムアウト設定を増やす
-- メモリサイズを増やす（現在512MB）
-
-### Comprehend分析が失敗する
-
-- カスタム分類器のエンドポイントが起動していることを確認
-- IAMロールに適切な権限があることを確認
-- 現在はモック実装なので、カスタム分類器統合は今後の実装
-
-### フロントエンドが表示されない
-
-- CloudFrontのキャッシュをクリア: `aws cloudfront create-invalidation --distribution-id <ID> --paths "/*"`
-- S3バケットにファイルがアップロードされていることを確認
-
-## コスト最適化
-
-現在の設定でのコスト最適化:
-
-- DynamoDB: PAY_PER_REQUEST（オンデマンド）
-- Lambda: ARM64アーキテクチャ、512MBメモリ
-- CloudFront: PRICE_CLASS_100（北米・ヨーロッパのみ）
-- Point-in-Time Recovery: 無効
-
-月間想定コスト（低トラフィック）: $5-10程度
-
-## クリーンアップ
-
-全リソースを削除する場合:
-
-```bash
-cd infrastructure
-cdk destroy
-```
-
-注意: DynamoDBテーブルのデータも削除されます。
+- IAMロールは最小権限の原則に従って設定
+- API Gatewayでレート制限を設定
+- DynamoDBは暗号化有効
+- Amplifyは HTTPS 強制

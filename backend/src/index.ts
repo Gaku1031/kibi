@@ -23,7 +23,7 @@ app.get("/health", (c) => {
 });
 
 // API ルート
-app.route("/api/diary", diaryRoutes);
+app.route("/diary", diaryRoutes);
 
 // 404 ハンドラー
 app.notFound((c) => {
