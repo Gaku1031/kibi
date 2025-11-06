@@ -111,8 +111,12 @@ export class EmotionAnalysisService {
   // 完了したジョブの結果を取得
   async getJobResult(diaryId: string, jobId: string): Promise<Omit<EmotionAnalysis, 'diaryId' | 'analyzedAt'>> {
     try {
-      // S3から結果を取得
-      const outputKey = `output/${diaryId}/output.tar.gz`;
+      console.log(`[Comprehend] Fetching result from S3 for diary ${diaryId}, job ${jobId}`);
+
+      // S3から結果を取得（Comprehendの出力は predictions.jsonl）
+      const outputKey = `output/${diaryId}/predictions.jsonl`;
+      console.log(`[Comprehend] Attempting to fetch S3 key: ${outputKey}`);
+
       const command = new GetObjectCommand({
         Bucket: CONTENT_BUCKET,
         Key: outputKey,
@@ -121,13 +125,19 @@ export class EmotionAnalysisService {
       const result = await s3Client.send(command);
       const body = await result.Body?.transformToString();
 
+      console.log(`[Comprehend] S3 result body length: ${body?.length || 0}`);
+
       if (!body) {
-        throw new Error('No result found');
+        console.error('[Comprehend] Empty result from S3');
+        throw new Error('No result found in S3');
       }
 
       // JSONLフォーマットをパース
       const lines = body.trim().split('\n');
+      console.log(`[Comprehend] Found ${lines.length} lines in result`);
+
       const firstResult = JSON.parse(lines[0]);
+      console.log(`[Comprehend] Parsed result:`, JSON.stringify(firstResult, null, 2));
 
       // Comprehendの結果から8感情のスコアを構築
       const emotions: Omit<EmotionAnalysis, 'diaryId' | 'analyzedAt'> = {
