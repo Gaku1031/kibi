@@ -148,28 +148,65 @@ jobs:
         working-directory: infrastructure
         run: |
           npm ci
-          echo "=== Starting CDK Bootstrap ==="
-          echo "Account: 223708988018"
-          echo "Region: ${{ env.AWS_REGION }}"
+          echo "=== Checking existing CDK Bootstrap stack ==="
 
-          npx cdk bootstrap aws://223708988018/${{ env.AWS_REGION }} --verbose --force
+          # 既存のCDKToolkitスタックが古い場合は削除
+          set +e
+          STACK_EXISTS=$(aws cloudformation describe-stacks \
+            --stack-name CDKToolkit \
+            --region ${{ env.AWS_REGION }} 2>&1)
+          STACK_EXIT_CODE=$?
+          set -e
+
+          if [ $STACK_EXIT_CODE -eq 0 ]; then
+            echo "Found existing CDKToolkit stack"
+
+            # SSMパラメータが存在するか確認
+            set +e
+            aws ssm get-parameter \
+              --name /cdk-bootstrap/hnb659fds/version \
+              --region ${{ env.AWS_REGION }} >/dev/null 2>&1
+            SSM_EXIT_CODE=$?
+            set -e
+
+            if [ $SSM_EXIT_CODE -ne 0 ]; then
+              echo "Old bootstrap stack detected (missing SSM parameters)"
+              echo "Deleting old CDKToolkit stack..."
+
+              aws cloudformation delete-stack \
+                --stack-name CDKToolkit \
+                --region ${{ env.AWS_REGION }}
+
+              echo "Waiting for stack deletion to complete..."
+              aws cloudformation wait stack-delete-complete \
+                --stack-name CDKToolkit \
+                --region ${{ env.AWS_REGION }}
+
+              echo "Old stack deleted successfully"
+            else
+              echo "Bootstrap stack is up-to-date"
+            fi
+          else
+            echo "No existing CDKToolkit stack found"
+          fi
+
+          echo "=== Starting CDK Bootstrap ==="
+          npx cdk bootstrap aws://223708988018/${{ env.AWS_REGION }} --verbose
 
           echo "=== Verifying Bootstrap ==="
-          # CloudFormationスタックの存在確認
           aws cloudformation describe-stacks \
             --stack-name CDKToolkit \
             --region ${{ env.AWS_REGION }} \
             --query 'Stacks[0].StackStatus' \
             --output text
 
-          # SSMパラメータの存在確認
           aws ssm get-parameter \
             --name /cdk-bootstrap/hnb659fds/version \
             --region ${{ env.AWS_REGION }} \
             --query 'Parameter.Value' \
             --output text
 
-          echo "=== Bootstrap verification completed ==="
+          echo "=== Bootstrap completed successfully ==="
 
       - name: Deploy infrastructure
         working-directory: infrastructure
