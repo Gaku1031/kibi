@@ -26,7 +26,7 @@ export class EmotionAnalysisService {
   // 非同期ジョブを開始（ジョブIDを返す）
   async startAnalysisJob(diaryId: string, text: string): Promise<string> {
     try {
-      console.log(`Starting async classification job for diary ${diaryId}`);
+      console.log(`[Comprehend] Starting async classification job for diary ${diaryId}`);
 
       // 1. 日本語を英語に翻訳
       const translatedText = await this.translateToEnglish(text);
@@ -61,10 +61,10 @@ export class EmotionAnalysisService {
         throw new Error('Failed to start classification job');
       }
 
-      console.log(`Started job: ${jobId}`);
+      console.log(`[Comprehend] Started job: ${jobId}`);
       return jobId;
     } catch (error) {
-      console.error('Failed to start analysis job:', error);
+      console.error('[Comprehend] Failed to start analysis job:', error);
       throw error;
     }
   }
@@ -103,7 +103,7 @@ export class EmotionAnalysisService {
         progress,
       };
     } catch (error) {
-      console.error('Failed to check job status:', error);
+      console.error('[Comprehend] Failed to check job status:', error);
       throw error;
     }
   }
@@ -155,7 +155,7 @@ export class EmotionAnalysisService {
 
       return emotions;
     } catch (error) {
-      console.error('Failed to get job result:', error);
+      console.error('[Comprehend] Failed to get job result:', error);
       throw error;
     }
   }

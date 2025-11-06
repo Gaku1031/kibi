@@ -37,7 +37,7 @@ export function Sidebar({ diaries = [] }: SidebarProps) {
         }
       }
     } catch (error) {
-      console.error('削除に失敗しました:', error);
+      console.error('[Sidebar] 削除に失敗しました:', error);
     } finally {
       setDeleteTargetId(null);
     }

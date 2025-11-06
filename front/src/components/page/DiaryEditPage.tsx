@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useDiary, useDiaryActions } from '../../usecases/diary/useDiary';
-import { useDiaryList } from '../../usecases/diary/useDiaryList';
-import { useAnalysisPolling } from '../../usecases/diary/useAnalysisPolling';
-import { isDiaryModified } from '../../models/diary/selector';
-import { Editor } from '../ui/Editor';
-import { Button } from '../ui/Button';
-import { Modal } from '../ui/Modal';
-import { Sidebar } from '../ui/Sidebar';
-import { EmotionIcon } from '../model/emotion/EmotionIcon';
-import { EmotionBreakdown } from '../model/emotion/EmotionBreakdown';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useDiary, useDiaryActions } from "../../usecases/diary/useDiary";
+import { useDiaryList } from "../../usecases/diary/useDiaryList";
+import { useAnalysisPolling } from "../../usecases/diary/useAnalysisPolling";
+import { isDiaryModified } from "../../models/diary/selector";
+import { Editor } from "../ui/Editor";
+import { Button } from "../ui/Button";
+import { Modal } from "../ui/Modal";
+import { Sidebar } from "../ui/Sidebar";
+import { EmotionIcon } from "../model/emotion/EmotionIcon";
+import { EmotionBreakdown } from "../model/emotion/EmotionBreakdown";
 
 interface DiaryEditPageProps {
   id?: string; // undefinedの場合は新規作成
@@ -21,21 +21,62 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
   const router = useRouter();
   const { diary, isLoading: isDiaryLoading } = useDiary(id);
   const { diaries } = useDiaryList();
-  const { createDiary, updateDiary, startAsyncAnalysis, isCreating, isUpdating } = useDiaryActions();
+  const {
+    createDiary,
+    updateDiary,
+    startAsyncAnalysis,
+    isCreating,
+    isUpdating,
+  } = useDiaryActions();
   const { addJob, getJobForDiary } = useAnalysisPolling();
 
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(
+    null,
+  );
 
   const isNewDiary = !id;
-  const isModified = diary ? isDiaryModified(diary, { title, content }) : (title.trim() !== '' || content.trim() !== '');
+  const isModified = diary
+    ? isDiaryModified(diary, { title, content })
+    : title.trim() !== "" || content.trim() !== "";
   const analysisJob = id ? getJobForDiary(id) : null;
   const isSaving = isCreating || isUpdating;
   const isAnalyzing = !!analysisJob;
   const analysisProgress = analysisJob?.progress || 0;
   const [isContentInitialized, setIsContentInitialized] = useState(false);
+
+  // 感情分析ステータスメッセージを生成
+  const getAnalysisStatusMessage = () => {
+    if (!analysisJob) return null;
+
+    const jobIdShort = analysisJob.jobId.substring(0, 8);
+    const startedTime = analysisJob.startedAt.toLocaleTimeString("ja-JP");
+
+    let statusText = "";
+    switch (analysisJob.status) {
+      case "SUBMITTED":
+        statusText = "分析タスクを送信しました";
+        break;
+      case "IN_PROGRESS":
+        statusText = "感情を分析中...";
+        break;
+      case "COMPLETED":
+        statusText = "分析が完了しました";
+        break;
+      case "FAILED":
+        statusText = "分析に失敗しました";
+        break;
+      default:
+        statusText = "処理中...";
+    }
+
+    return {
+      statusText,
+      details: `ジョブID: ${jobIdShort} | 開始: ${startedTime}`,
+    };
+  };
 
   // 日記データの初期化
   useEffect(() => {
@@ -51,20 +92,27 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isModified) {
         e.preventDefault();
-        e.returnValue = '';
+        e.returnValue = "";
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isModified]);
 
   const handleSave = async () => {
+    console.log("[DiaryEditPage] handleSave called with content:", content);
     try {
       let diaryId: string;
 
       if (isNewDiary) {
         // 新規作成: 保存してからすぐに遷移
+        console.log(
+          "[DiaryEditPage] Creating new diary with title:",
+          title,
+          "content length:",
+          content.length,
+        );
         const newDiary = await createDiary({ title, content });
         diaryId = newDiary.id;
 
@@ -76,7 +124,7 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
               addJob(diaryId, jobId);
             }
           } catch (error) {
-            console.error('感情分析の開始に失敗しました:', error);
+            console.error("感情分析の開始に失敗しました:", error);
           }
         }
 
@@ -84,6 +132,14 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
         router.push(`/diary/${diaryId}`);
       } else if (diary) {
         // 既存日記の更新: 保存してから感情分析を開始
+        console.log(
+          "[DiaryEditPage] Updating diary:",
+          diary.id,
+          "with title:",
+          title,
+          "content length:",
+          content.length,
+        );
         await updateDiary(diary.id, { title, content });
 
         if (content.trim()) {
@@ -93,12 +149,12 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
               addJob(diary.id, jobId);
             }
           } catch (error) {
-            console.error('感情分析の開始に失敗しました:', error);
+            console.error("感情分析の開始に失敗しました:", error);
           }
         }
       }
     } catch (error) {
-      console.error('保存に失敗しました:', error);
+      console.error("保存に失敗しました:", error);
       // TODO: エラートースト表示
     }
   };
@@ -115,7 +171,10 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
     return (
       <div className="flex h-screen">
         <Sidebar diaries={diaries} />
-        <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
+        <div
+          className="flex-1 flex items-center justify-center"
+          style={{ backgroundColor: "var(--background)" }}
+        >
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-700" />
         </div>
       </div>
@@ -126,10 +185,15 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
     return (
       <div className="flex h-screen">
         <Sidebar diaries={diaries} />
-        <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
+        <div
+          className="flex-1 flex items-center justify-center"
+          style={{ backgroundColor: "var(--background)" }}
+        >
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">日記が見つかりません</h2>
-            <Button onClick={() => router.push('/')}>ホームに戻る</Button>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              日記が見つかりません
+            </h2>
+            <Button onClick={() => router.push("/")}>ホームに戻る</Button>
           </div>
         </div>
       </div>
@@ -144,7 +208,10 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
       {/* メインコンテンツエリア */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* エディタエリア */}
-        <main className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--background)' }}>
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ backgroundColor: "var(--background)" }}
+        >
           <div className="max-w-4xl mx-auto px-24 pt-32 pb-12">
             {/* アイコンと感情分析表示 */}
             {diary?.iconData && diary?.emotionAnalysis && (
@@ -155,23 +222,38 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
             )}
 
             {/* 感情分析中の表示 */}
-            {isAnalyzing && (
-              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent" />
-                  <span className="text-blue-900 font-medium">感情分析中...</span>
-                </div>
-                <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-blue-600 h-full transition-all duration-300 ease-out"
-                    style={{ width: `${analysisProgress}%` }}
-                  />
-                </div>
-                <p className="text-sm text-blue-700 mt-2">
-                  {analysisProgress < 100 ? `処理中 (${analysisProgress}%)` : '完了しました'}
-                </p>
-              </div>
-            )}
+            {isAnalyzing &&
+              (() => {
+                const statusMessage = getAnalysisStatusMessage();
+                if (!statusMessage) return null;
+
+                return (
+                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent" />
+                      <span className="text-blue-900 font-medium">
+                        {statusMessage.statusText}
+                      </span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full transition-all duration-500 ease-out"
+                        style={{ width: `${analysisProgress}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 text-center">
+                      <p className="text-sm font-semibold text-blue-900">
+                        {analysisProgress}%
+                      </p>
+                    </div>
+                    <div className="mt-1">
+                      <p className="text-xs text-blue-600 font-mono">
+                        {statusMessage.details}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
             {/* タイトル入力とボタン */}
             <div className="flex items-center justify-between gap-4 mb-4">
@@ -184,7 +266,9 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
               />
               <div className="flex items-center gap-3 flex-shrink-0">
                 {isModified && (
-                  <span className="text-xs text-orange-600 font-medium whitespace-nowrap">未保存</span>
+                  <span className="text-xs text-orange-600 font-medium whitespace-nowrap">
+                    未保存
+                  </span>
                 )}
                 <Button
                   onClick={handleSave}
@@ -193,8 +277,18 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
                   size="lg"
                   className="shadow-lg hover:shadow-xl px-8"
                 >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  <svg
+                    className="w-5 h-5 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+                    />
                   </svg>
                   保存
                 </Button>
@@ -204,13 +298,9 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
             {/* 日付表示 */}
             {diary && (
               <div className="flex items-center space-x-4 text-sm text-gray-500 mb-8">
-                <span>
-                  作成: {diary.createdAt.toLocaleDateString('ja-JP')}
-                </span>
+                <span>作成: {diary.createdAt.toLocaleDateString("ja-JP")}</span>
                 <span>•</span>
-                <span>
-                  更新: {diary.updatedAt.toLocaleDateString('ja-JP')}
-                </span>
+                <span>更新: {diary.updatedAt.toLocaleDateString("ja-JP")}</span>
                 {isAnalyzing ? (
                   <>
                     <span>•</span>
@@ -219,11 +309,13 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
                       分析中
                     </span>
                   </>
-                ) : diary.emotionAnalysis && (
-                  <>
-                    <span>•</span>
-                    <span className="text-blue-600">感情分析済み</span>
-                  </>
+                ) : (
+                  diary.emotionAnalysis && (
+                    <>
+                      <span>•</span>
+                      <span className="text-blue-600">感情分析済み</span>
+                    </>
+                  )
                 )}
               </div>
             )}
@@ -232,7 +324,13 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
             {(isNewDiary || isContentInitialized) && (
               <Editor
                 initialContent={content}
-                onChange={setContent}
+                onChange={(newContent) => {
+                  console.log(
+                    "[DiaryEditPage] Editor content received, length:",
+                    newContent.length,
+                  );
+                  setContent(newContent);
+                }}
                 placeholder="今日はどんな一日でしたか？"
               />
             )}
@@ -259,17 +357,11 @@ export function DiaryEditPage({ id }: DiaryEditPageProps) {
               キャンセル
             </Button>
 
-            <Button
-              onClick={handleSave}
-              isLoading={isSaving}
-            >
+            <Button onClick={handleSave} isLoading={isSaving}>
               保存して移動
             </Button>
 
-            <Button
-              variant="danger"
-              onClick={handleDiscardChanges}
-            >
+            <Button variant="danger" onClick={handleDiscardChanges}>
               破棄して移動
             </Button>
           </div>

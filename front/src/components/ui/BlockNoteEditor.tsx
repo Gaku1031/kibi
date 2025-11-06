@@ -38,7 +38,9 @@ export default function BlockNoteEditorComponent({
     // エディタの変更を監視
     const unsubscribe = editor.onChange(() => {
       const blocks = editor.document;
-      onChange(JSON.stringify(blocks));
+      const serialized = JSON.stringify(blocks);
+      console.log('[BlockNote] Content changed:', serialized);
+      onChange(serialized);
     });
 
     return unsubscribe;

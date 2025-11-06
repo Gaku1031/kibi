@@ -31,14 +31,28 @@ export function useDiaryActions() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const createDiary = async (data: CreateDiaryRequest): Promise<DiaryEntry> => {
+    console.log('[useDiary] createDiary called', {
+      contentLength: data.content?.length || 0,
+      hasTitle: !!data.title
+    });
+
     setIsCreating(true);
     try {
       const newDiary = await diaryRepository.createDiary(data);
-      
+      console.log('[useDiary] createDiary API response', {
+        diaryId: newDiary.id,
+        contentLength: newDiary.content?.length || 0,
+        createdAt: newDiary.createdAt
+      });
+
       // キャッシュを更新
+      console.log('[useDiary] Invalidating cache:', DIARY_LIST_KEY);
       mutate(DIARY_LIST_KEY);
-      mutate(getDiaryKey(newDiary.id), newDiary);
-      
+
+      const diaryKey = getDiaryKey(newDiary.id);
+      console.log('[useDiary] Invalidating cache:', diaryKey);
+      mutate(diaryKey, newDiary);
+
       return newDiary;
     } finally {
       setIsCreating(false);
@@ -46,16 +60,32 @@ export function useDiaryActions() {
   };
 
   const updateDiary = async (id: string, data: UpdateDiaryRequest): Promise<DiaryEntry | null> => {
+    console.log('[useDiary] updateDiary called', {
+      diaryId: id,
+      contentLength: data.content?.length || 0,
+      hasTitle: !!data.title
+    });
+
     setIsUpdating(true);
     try {
       const updatedDiary = await diaryRepository.updateDiary(id, data);
-      
+      console.log('[useDiary] updateDiary API response', {
+        diaryId: id,
+        success: !!updatedDiary,
+        contentLength: updatedDiary?.content?.length || 0,
+        updatedAt: updatedDiary?.updatedAt
+      });
+
       if (updatedDiary) {
         // キャッシュを更新
+        console.log('[useDiary] Invalidating cache:', DIARY_LIST_KEY);
         mutate(DIARY_LIST_KEY);
-        mutate(getDiaryKey(id), updatedDiary);
+
+        const diaryKey = getDiaryKey(id);
+        console.log('[useDiary] Invalidating cache:', diaryKey);
+        mutate(diaryKey, updatedDiary);
       }
-      
+
       return updatedDiary;
     } finally {
       setIsUpdating(false);

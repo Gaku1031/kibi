@@ -28,12 +28,14 @@ export interface DiaryRepository {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === 'production' ? '/' : 'http://localhost:8080');
 
-// デバッグ用ログ（削除予定）
-console.log('API Configuration:', {
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  NODE_ENV: process.env.NODE_ENV,
-  API_BASE_URL,
-});
+// API設定のデバッグログ（開発環境のみ）
+if (process.env.NODE_ENV === 'development') {
+  console.log('[Repository] API Configuration:', {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    API_BASE_URL,
+  });
+}
 
 const USE_MOCK = process.env.NODE_ENV === 'development';
 
