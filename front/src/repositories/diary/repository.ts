@@ -11,9 +11,15 @@ export interface DiaryRepository {
 }
 
 // 本番環境ではAPIを使用、開発環境ではモックを使用
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' 
-  : 'http://localhost:8080/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:8080/api');
+
+// デバッグ用ログ（削除予定）
+console.log('API Configuration:', {
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  NODE_ENV: process.env.NODE_ENV,
+  API_BASE_URL,
+});
 
 const USE_MOCK = process.env.NODE_ENV === 'development';
 
