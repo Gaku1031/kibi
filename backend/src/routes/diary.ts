@@ -129,39 +129,75 @@ app.delete('/:id', async (c) => {
   }
 });
 
-// 感情分析実行
+// 感情分析ジョブを開始（非同期）
 app.post('/:id/analyze', async (c) => {
   try {
     const id = c.req.param('id');
     const diary = await diaryService.getDiary(id);
-    
+
     if (!diary) {
       return c.json({ error: 'Diary not found' }, 404);
     }
-    
-    // テキストから感情分析を実行
-    const emotionResult = await emotionAnalysisService.analyzeEmotion(diary.content);
-    
-    const analysis: EmotionAnalysis = {
-      diaryId: id,
-      ...emotionResult,
-      analyzedAt: new Date().toISOString(),
-    };
-    
-    // 分析結果を保存
-    await emotionAnalysisDBService.saveAnalysis(analysis);
-    
-    // アイコンデータを生成
-    const iconData = generateEmotionIcon(analysis, parseInt(id.slice(-6), 16));
-    
+
+    // 非同期ジョブを開始
+    const jobId = await emotionAnalysisService.startAnalysisJob(id, diary.content);
+
     return c.json({
-      ...diary,
-      emotionAnalysis: analysis,
-      iconData
+      jobId,
+      status: 'SUBMITTED',
+      message: 'Analysis job started. Poll /analyze/status/:jobId for progress'
     });
   } catch (error) {
-    console.error('Failed to analyze emotion:', error);
-    return c.json({ error: 'Failed to analyze emotion' }, 500);
+    console.error('Failed to start analysis job:', error);
+    return c.json({ error: 'Failed to start analysis job' }, 500);
+  }
+});
+
+// 分析ジョブのステータスをチェック
+app.get('/:id/analyze/status/:jobId', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const jobId = c.req.param('jobId');
+
+    const statusResult = await emotionAnalysisService.checkJobStatus(jobId);
+
+    // 完了している場合は結果を取得して保存
+    if (statusResult.status === 'COMPLETED') {
+      const emotionResult = await emotionAnalysisService.getJobResult(id, jobId);
+
+      const analysis: EmotionAnalysis = {
+        diaryId: id,
+        ...emotionResult,
+        analyzedAt: new Date().toISOString(),
+      };
+
+      // 分析結果を保存
+      await emotionAnalysisDBService.saveAnalysis(analysis);
+
+      // 日記データを取得
+      const diary = await diaryService.getDiary(id);
+
+      // アイコンデータを生成
+      const iconData = generateEmotionIcon(analysis, parseInt(id.slice(-6), 16));
+
+      return c.json({
+        status: 'COMPLETED',
+        diary: {
+          ...diary,
+          emotionAnalysis: analysis,
+          iconData
+        }
+      });
+    }
+
+    // 進行中または失敗
+    return c.json({
+      status: statusResult.status,
+      progress: statusResult.progress
+    });
+  } catch (error) {
+    console.error('Failed to check analysis status:', error);
+    return c.json({ error: 'Failed to check analysis status' }, 500);
   }
 });
 

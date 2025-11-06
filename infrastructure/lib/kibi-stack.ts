@@ -54,14 +54,18 @@ export class KibiStack extends cdk.Stack {
       PORT: '8080',
     };
 
-    // 本番環境ではComprehendエンドポイントを使用
-    const comprehendEndpointArn = process.env.COMPREHEND_ENDPOINT_ARN;
-    if (comprehendEndpointArn) {
-      envVars.COMPREHEND_ENDPOINT_ARN = comprehendEndpointArn;
-      console.log(`Using Comprehend endpoint: ${comprehendEndpointArn}`);
-    } else {
-      console.log('No Comprehend endpoint configured. Using mock implementation.');
-    }
+    // Comprehend非同期ジョブ用のIAMロール
+    const comprehendDataAccessRole = new iam.Role(this, 'ComprehendDataAccessRole', {
+      assumedBy: new iam.ServicePrincipal('comprehend.amazonaws.com'),
+      description: 'Role for Comprehend to access S3',
+    });
+
+    contentBucket.grantReadWrite(comprehendDataAccessRole);
+
+    envVars.COMPREHEND_DATA_ACCESS_ROLE_ARN = comprehendDataAccessRole.roleArn;
+    envVars.COMPREHEND_CLASSIFIER_ARN = 'arn:aws:comprehend:ap-northeast-1:223708988018:document-classifier/kibi-emotion-classifier';
+
+    console.log('Using Comprehend async job mode (no endpoint required)');
 
     const apiFunction = new lambda.DockerImageFunction(this, 'ApiFunction', {
       code: lambda.DockerImageCode.fromImageAsset('../backend'),
@@ -76,14 +80,15 @@ export class KibiStack extends cdk.Stack {
     emotionAnalysisTable.grantReadWriteData(apiFunction);
     contentBucket.grantReadWrite(apiFunction);
 
-    // Comprehend and Translate permissions
+    // Comprehend and Translate permissions (async jobs)
     apiFunction.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
-        'comprehend:DetectSentiment',
-        'comprehend:ClassifyDocument',
+        'comprehend:StartDocumentClassificationJob',
+        'comprehend:DescribeDocumentClassificationJob',
         'comprehend:DescribeDocumentClassifier',
         'translate:TranslateText',
+        'iam:PassRole', // Comprehendにロールを渡すために必要
       ],
       resources: ['*'],
     }));
