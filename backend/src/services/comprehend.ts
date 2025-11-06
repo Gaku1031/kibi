@@ -113,57 +113,134 @@ export class EmotionAnalysisService {
     try {
       console.log(`[Comprehend] Fetching result from S3 for diary ${diaryId}, job ${jobId}`);
 
-      // S3から結果を取得（Comprehendの出力は predictions.jsonl）
-      const outputKey = `output/${diaryId}/predictions.jsonl`;
-      console.log(`[Comprehend] Attempting to fetch S3 key: ${outputKey}`);
-
-      const command = new GetObjectCommand({
+      // Comprehendの出力パスは output/{diaryId}/223708988018-CLN-{jobId}/output/output.tar.gz
+      // しかし、tar.gzの中にpredictions.jsonlがある
+      // まずtar.gzの場所を特定するためにプレフィックスで検索
+      const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+      const listCommand = new ListObjectsV2Command({
         Bucket: CONTENT_BUCKET,
-        Key: outputKey,
+        Prefix: `output/${diaryId}/`,
       });
 
-      const result = await s3Client.send(command);
-      const body = await result.Body?.transformToString();
+      const listResult = await s3Client.send(listCommand);
+      console.log(`[Comprehend] Found ${listResult.Contents?.length || 0} objects under output/${diaryId}/`);
 
-      console.log(`[Comprehend] S3 result body length: ${body?.length || 0}`);
+      // output.tar.gzを探す
+      const tarGzFile = listResult.Contents?.find(obj => obj.Key?.endsWith('output.tar.gz'));
 
-      if (!body) {
-        console.error('[Comprehend] Empty result from S3');
-        throw new Error('No result found in S3');
+      if (!tarGzFile?.Key) {
+        console.error('[Comprehend] output.tar.gz not found in S3');
+        throw new Error('Comprehend output file not found');
       }
 
-      // JSONLフォーマットをパース
-      const lines = body.trim().split('\n');
-      console.log(`[Comprehend] Found ${lines.length} lines in result`);
+      console.log(`[Comprehend] Found tar.gz file: ${tarGzFile.Key}`);
 
-      const firstResult = JSON.parse(lines[0]);
-      console.log(`[Comprehend] Parsed result:`, JSON.stringify(firstResult, null, 2));
+      // tar.gzをダウンロード
+      const getCommand = new GetObjectCommand({
+        Bucket: CONTENT_BUCKET,
+        Key: tarGzFile.Key,
+      });
 
-      // Comprehendの結果から8感情のスコアを構築
-      const emotions: Omit<EmotionAnalysis, 'diaryId' | 'analyzedAt'> = {
-        joy: 0,
-        trust: 0,
-        fear: 0,
-        surprise: 0,
-        sadness: 0,
-        disgust: 0,
-        anger: 0,
-        anticipation: 0,
-      };
+      const result = await s3Client.send(getCommand);
+      const buffer = await result.Body?.transformToByteArray();
 
-      // Classesから各感情のスコアを取得
-      if (firstResult.Classes) {
-        for (const classResult of firstResult.Classes) {
-          const emotionName = classResult.Name?.toLowerCase() as EmotionType;
-          const score = classResult.Score || 0;
+      if (!buffer) {
+        console.error('[Comprehend] Empty tar.gz from S3');
+        throw new Error('Empty result file');
+      }
 
-          if (emotionName in emotions) {
-            emotions[emotionName] = score;
+      console.log(`[Comprehend] Downloaded tar.gz, size: ${buffer.length} bytes`);
+
+      // tar.gzを展開してpredictions.jsonlを読む
+      const { default: pako } = await import('pako');
+      const { default: tar } = await import('tar-stream');
+
+      // gzip解凍
+      const decompressed = pako.ungzip(buffer);
+      console.log(`[Comprehend] Decompressed size: ${decompressed.length} bytes`);
+
+      // tarから predictions.jsonl を抽出
+      return new Promise((resolve, reject) => {
+        const extract = tar.extract();
+        let foundPredictions = false;
+
+        extract.on('entry', (header: any, stream: any, next: any) => {
+          console.log(`[Comprehend] Found file in tar: ${header.name}`);
+
+          if (header.name === 'predictions.jsonl') {
+            foundPredictions = true;
+            const chunks: Buffer[] = [];
+
+            stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+            stream.on('end', () => {
+              const content = Buffer.concat(chunks).toString('utf-8');
+              console.log(`[Comprehend] predictions.jsonl content length: ${content.length}`);
+
+              try {
+                const lines = content.trim().split('\n');
+                console.log(`[Comprehend] Found ${lines.length} lines in predictions.jsonl`);
+
+                const firstResult = JSON.parse(lines[0]);
+                console.log(`[Comprehend] Parsed result:`, JSON.stringify(firstResult, null, 2));
+
+                // Comprehendの結果から8感情のスコアを構築
+                const emotions: Omit<EmotionAnalysis, 'diaryId' | 'analyzedAt'> = {
+                  joy: 0,
+                  trust: 0,
+                  fear: 0,
+                  surprise: 0,
+                  sadness: 0,
+                  disgust: 0,
+                  anger: 0,
+                  anticipation: 0,
+                };
+
+                // Classesから各感情のスコアを取得
+                if (firstResult.Classes) {
+                  for (const classResult of firstResult.Classes) {
+                    const emotionName = classResult.Name?.toLowerCase() as EmotionType;
+                    const score = classResult.Score || 0;
+
+                    if (emotionName in emotions) {
+                      emotions[emotionName] = score;
+                    }
+                  }
+                }
+
+                resolve(emotions);
+              } catch (parseError) {
+                console.error('[Comprehend] Failed to parse predictions.jsonl:', parseError);
+                reject(parseError);
+              }
+              next();
+            });
+
+            stream.on('error', (err: Error) => {
+              console.error('[Comprehend] Stream error:', err);
+              reject(err);
+            });
+          } else {
+            // Skip this entry
+            stream.resume();
+            next();
           }
-        }
-      }
+        });
 
-      return emotions;
+        extract.on('finish', () => {
+          if (!foundPredictions) {
+            console.error('[Comprehend] predictions.jsonl not found in tar.gz');
+            reject(new Error('predictions.jsonl not found in archive'));
+          }
+        });
+
+        extract.on('error', (err: Error) => {
+          console.error('[Comprehend] Tar extraction error:', err);
+          reject(err);
+        });
+
+        // Write decompressed data to extract stream
+        extract.end(decompressed);
+      });
     } catch (error) {
       console.error('[Comprehend] Failed to get job result:', error);
       throw error;
