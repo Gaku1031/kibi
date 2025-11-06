@@ -16,7 +16,9 @@ export class KibiStack extends cdk.Stack {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // コスト最適化
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      pointInTimeRecovery: false, // コスト最適化
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: false, // コスト最適化
+      },
     });
 
     // GSI for listing diaries by creation date
@@ -31,7 +33,9 @@ export class KibiStack extends cdk.Stack {
       partitionKey: { name: 'diaryId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      pointInTimeRecovery: false,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: false,
+      },
     });
 
     // S3 Bucket for storing diary content (for Comprehend analysis)
@@ -61,9 +65,9 @@ export class KibiStack extends cdk.Stack {
 
     const apiFunction = new lambda.DockerImageFunction(this, 'ApiFunction', {
       code: lambda.DockerImageCode.fromImageAsset('../backend'),
-      architecture: lambda.Architecture.ARM_64, // コスト最適化
+      architecture: lambda.Architecture.X86_64, // x86_64 for compatibility
       timeout: cdk.Duration.seconds(30),
-      memorySize: 512, // コスト最適化
+      memorySize: 512,
       environment: envVars,
     });
 
