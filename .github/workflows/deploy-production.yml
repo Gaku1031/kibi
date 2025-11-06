@@ -148,8 +148,28 @@ jobs:
         working-directory: infrastructure
         run: |
           npm ci
-          echo "Bootstrapping CDK environment with verbose output..."
+          echo "=== Starting CDK Bootstrap ==="
+          echo "Account: 223708988018"
+          echo "Region: ${{ env.AWS_REGION }}"
+
           npx cdk bootstrap aws://223708988018/${{ env.AWS_REGION }} --verbose --force
+
+          echo "=== Verifying Bootstrap ==="
+          # CloudFormationスタックの存在確認
+          aws cloudformation describe-stacks \
+            --stack-name CDKToolkit \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].StackStatus' \
+            --output text
+
+          # SSMパラメータの存在確認
+          aws ssm get-parameter \
+            --name /cdk-bootstrap/hnb659fds/version \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Parameter.Value' \
+            --output text
+
+          echo "=== Bootstrap verification completed ==="
 
       - name: Deploy infrastructure
         working-directory: infrastructure
