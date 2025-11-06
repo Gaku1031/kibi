@@ -144,30 +144,12 @@ jobs:
           # 環境変数として出力
           echo "endpoint_arn=$ENDPOINT_ARN" >> $GITHUB_OUTPUT
 
-      - name: Bootstrap CDK (if needed)
+      - name: Bootstrap CDK environment
         working-directory: infrastructure
         run: |
           npm ci
-
-          echo "Bootstrapping CDK environment..."
-          set +e
-          BOOTSTRAP_OUTPUT=$(npx cdk bootstrap aws://223708988018/${{ env.AWS_REGION }} 2>&1)
-          BOOTSTRAP_EXIT_CODE=$?
-          set -e
-
-          echo "$BOOTSTRAP_OUTPUT"
-
-          if [ $BOOTSTRAP_EXIT_CODE -ne 0 ]; then
-            # 既にbootstrapされている場合は無視
-            if echo "$BOOTSTRAP_OUTPUT" | grep -q "already bootstrapped"; then
-              echo "Environment already bootstrapped"
-            else
-              echo "Bootstrap failed with exit code $BOOTSTRAP_EXIT_CODE"
-              exit 1
-            fi
-          else
-            echo "Bootstrap completed successfully"
-          fi
+          echo "Bootstrapping CDK environment with verbose output..."
+          npx cdk bootstrap aws://223708988018/${{ env.AWS_REGION }} --verbose --force
 
       - name: Deploy infrastructure
         working-directory: infrastructure
