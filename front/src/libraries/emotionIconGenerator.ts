@@ -103,41 +103,45 @@ export function renderEmotionIconToSVG(
   height: number = 100
 ): string {
   const uniqueId = `icon-${icon.seed}`;
-  
-  const gradientDefs = icon.triangles.map((triangle, index) => {
-    const gradientId = `${uniqueId}-gradient-${index}`;
-    return `
-      <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style="stop-color:${triangle.gradient.startColor};stop-opacity:0.8" />
-        <stop offset="100%" style="stop-color:${triangle.gradient.endColor};stop-opacity:0.9" />
-      </linearGradient>
-    `;
-  }).join('');
 
-  const triangleElements = icon.triangles.map((triangle, index) => {
-    const size = triangle.size * 30; // 基本サイズ
-    const centerX = (triangle.x / 100) * width;
-    const centerY = (triangle.y / 100) * height;
-    
-    // 正三角形の頂点を計算
-    const points = [
-      [centerX, centerY - size * 0.577], // 上の頂点
-      [centerX - size * 0.5, centerY + size * 0.289], // 左下の頂点
-      [centerX + size * 0.5, centerY + size * 0.289]  // 右下の頂点
-    ];
-    
-    const gradientId = `${uniqueId}-gradient-${index}`;
-    
-    return `
-      <polygon 
-        points="${points.map(p => p.join(',')).join(' ')}"
-        fill="url(#${gradientId})"
-        transform="rotate(${triangle.rotation} ${centerX} ${centerY})"
-        stroke="rgba(255,255,255,0.3)"
-        stroke-width="1"
-      />
-    `;
-  }).join('');
+  const gradientDefs = icon.triangles
+    .filter(triangle => triangle.gradient) // gradientが存在する三角形のみ
+    .map((triangle, index) => {
+      const gradientId = `${uniqueId}-gradient-${index}`;
+      return `
+        <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${triangle.gradient.startColor};stop-opacity:0.8" />
+          <stop offset="100%" style="stop-color:${triangle.gradient.endColor};stop-opacity:0.9" />
+        </linearGradient>
+      `;
+    }).join('');
+
+  const triangleElements = icon.triangles
+    .filter(triangle => triangle.gradient) // gradientが存在する三角形のみ
+    .map((triangle, index) => {
+      const size = triangle.size * 30; // 基本サイズ
+      const centerX = (triangle.x / 100) * width;
+      const centerY = (triangle.y / 100) * height;
+
+      // 正三角形の頂点を計算
+      const points = [
+        [centerX, centerY - size * 0.577], // 上の頂点
+        [centerX - size * 0.5, centerY + size * 0.289], // 左下の頂点
+        [centerX + size * 0.5, centerY + size * 0.289]  // 右下の頂点
+      ];
+
+      const gradientId = `${uniqueId}-gradient-${index}`;
+
+      return `
+        <polygon
+          points="${points.map(p => p.join(',')).join(' ')}"
+          fill="url(#${gradientId})"
+          transform="rotate(${triangle.rotation} ${centerX} ${centerY})"
+          stroke="rgba(255,255,255,0.3)"
+          stroke-width="1"
+        />
+      `;
+    }).join('');
   
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
